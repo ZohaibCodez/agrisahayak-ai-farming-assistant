@@ -1,3 +1,22 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "cotton-leaf-curl",
+      "description": "A close-up of a cotton leaf affected by leaf curl virus.",
+      "imageUrl": "https://picsum.photos/seed/101/600/400",
+      "imageHint": "cotton leaf"
+    },
+    {
+      "id": "wheat-rust",
+      "description": "A wheat stalk showing signs of rust disease.",
+      "imageUrl": "https://picsum.photos/seed/102/600/400",
+      "imageHint": "wheat plant"
+    },
+    {
+      "id": "rice-blast",
+      "description": "Rice panicles with lesions from blast disease.",
+      "imageUrl": "https://picsum.photos/seed/103/600/400",
+      "imageHint": "rice plant"
+    }
+  ]
 }
