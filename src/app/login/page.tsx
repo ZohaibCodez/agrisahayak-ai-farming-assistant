@@ -19,11 +19,10 @@ export default function LoginPage() {
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    // Simulate API call
-    console.log(`Requesting OTP for +92${phone.replace(/^0/, '')}`);
+    // Simulate API call and bypass OTP for now
+    console.log(`Bypassing OTP for +92${phone.replace(/^0/, '')}`);
     setTimeout(() => {
-      setStep(2);
-      setIsLoading(false);
+      router.push('/dashboard');
     }, 1000);
   };
 
@@ -89,7 +88,7 @@ export default function LoginPage() {
                 </RadioGroup>
               </div>
               <Button type="submit" className="w-full" disabled={isLoading || phone.length < 10}>
-                {isLoading ? <LoadingSpinner message="Sending OTP..." /> : 'Sign In'}
+                {isLoading ? <LoadingSpinner message="Signing In..." /> : 'Sign In'}
               </Button>
             </form>
           )}
