@@ -13,11 +13,14 @@ import LoadingSpinner from '@/components/agrisahayak/loading-spinner';
 export default function LoginPage() {
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [phone, setPhone] = useState('');
   const router = useRouter();
 
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    // Simulate API call
+    console.log(`Requesting OTP for +92${phone.replace(/^0/, '')}`);
     setTimeout(() => {
       setStep(2);
       setIsLoading(false);
@@ -32,6 +35,14 @@ export default function LoginPage() {
     }, 1000);
   };
 
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Allow only numbers and limit length
+    const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+    setPhone(value);
+  }
+
+  const formattedPhone = phone.startsWith('0') ? phone.substring(1) : phone;
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
       <Card className="w-full max-w-md shadow-2xl">
@@ -40,7 +51,7 @@ export default function LoginPage() {
             <Leaf className="h-10 w-10 text-primary" />
           </div>
           <CardTitle className="text-3xl font-headline">Welcome to AgriSahayak</CardTitle>
-          <CardDescription>{step === 1 ? 'Enter your phone number to begin.' : 'Enter the OTP sent to your phone.'}</CardDescription>
+          <CardDescription>{step === 1 ? 'Enter your phone number to begin.' : `Enter the OTP sent to +92 ${formattedPhone}`}</CardDescription>
         </CardHeader>
         <CardContent>
           {step === 1 && (
@@ -51,7 +62,17 @@ export default function LoginPage() {
                   <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-input bg-secondary text-secondary-foreground text-sm">
                     +92
                   </span>
-                  <Input id="phone" type="tel" placeholder="300 1234567" required className="rounded-l-none" />
+                  <Input 
+                    id="phone" 
+                    type="tel" 
+                    placeholder="321 0777102" 
+                    required 
+                    className="rounded-l-none"
+                    value={phone}
+                    onChange={handlePhoneChange}
+                    pattern="\d{10}"
+                    title="Please enter a 10-digit phone number."
+                  />
                 </div>
               </div>
               <div className="space-y-3">
@@ -67,7 +88,7 @@ export default function LoginPage() {
                   </div>
                 </RadioGroup>
               </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || phone.length < 10}>
                 {isLoading ? <LoadingSpinner message="Sending OTP..." /> : 'Sign In'}
               </Button>
             </form>
