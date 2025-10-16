@@ -1,10 +1,19 @@
+
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { mockSuppliers } from "@/lib/data";
 import { MapPin, Star, Phone, MessageCircle } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function SuppliersCard() {
     const suppliers = mockSuppliers;
+    const [reviews, setReviews] = useState<number[]>([]);
+
+    useEffect(() => {
+        setReviews(suppliers.map(() => Math.floor(Math.random() * 50) + 5));
+    }, [suppliers]);
 
     return (
         <Card>
@@ -24,7 +33,11 @@ export default function SuppliersCard() {
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Star className="h-4 w-4 text-amber-500" />
-                                    <span>{supplier.rating} ({Math.floor(Math.random() * 50) + 5} reviews)</span>
+                                    {reviews[index] ? (
+                                        <span>{supplier.rating} ({reviews[index]} reviews)</span>
+                                    ) : (
+                                        <span>{supplier.rating}</span>
+                                    )}
                                 </div>
                             </div>
                             <p className="text-sm mt-2">

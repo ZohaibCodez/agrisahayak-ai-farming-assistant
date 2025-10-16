@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,11 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [phone, setPhone] = useState('');
   const router = useRouter();
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
 
   const handleSendOtp = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,6 +34,10 @@ export default function LoginPage() {
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setPhone(value);
+  }
+
+  if (!isClient) {
+    return null;
   }
 
   return (

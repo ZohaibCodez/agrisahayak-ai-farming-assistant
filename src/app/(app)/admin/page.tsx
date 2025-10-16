@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -6,8 +7,15 @@ import { mockAdminLogs, mockChartData } from "@/lib/data";
 import { Badge } from "@/components/ui/badge";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { Activity, Users, FileCheck, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function AdminPage() {
+    const [isClient, setIsClient] = useState(false);
+
+    useEffect(() => {
+        setIsClient(true);
+    }, []);
+
     const getStatusVariant = (status: 'success' | 'error') => {
         return status === 'success' ? 'default' : 'destructive';
     };
@@ -61,7 +69,7 @@ export default function AdminPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {mockAdminLogs.map(log => (
+                            {isClient && mockAdminLogs.map(log => (
                                 <TableRow key={log.id}>
                                     <TableCell className="font-medium">{log.agentName}</TableCell>
                                     <TableCell>{log.action}</TableCell>
