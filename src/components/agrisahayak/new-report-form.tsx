@@ -15,6 +15,8 @@ import { useToast } from "@/hooks/use-toast";
 import DiagnosisCard from './diagnosis-card';
 import TreatmentPlanCard from './treatment-plan-card';
 import SuppliersCard from './suppliers-card';
+import { useAuthUser } from '@/hooks/use-auth';
+import { createReport } from '@/lib/repositories';
 
 type LoadingState = 'idle' | 'diagnosing' | 'planning' | 'done' | 'error';
 
@@ -28,6 +30,7 @@ function fileToDataUri(file: File): Promise<string> {
 }
 
 export default function NewReportForm() {
+    const { user } = useAuthUser();
     const [imageFile, setImageFile] = useState<File | null>(null);
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [symptoms, setSymptoms] = useState('');
@@ -86,6 +89,24 @@ export default function NewReportForm() {
             toast({ title: "Plan Ready!", description: "Your complete report is now available.", className: "bg-green-100 text-green-800" });
 
             setLoadingState('done');
+
+            // Persist report
+            try {
+                if (user) {
+                    await createReport(user.uid, {
+                        crop: 'Unknown',
+                        imageUrl: imagePreview ?? undefined,
+                        disease: diagnosis.disease,
+                        confidence: diagnosis.confidence,
+                        affectedParts: diagnosis.affectedParts,
+                        severity: diagnosis.severity,
+                        description: diagnosis.description,
+                        plan: { totalCost: plan.totalCost, timeline: plan.timeline },
+                    } as any);
+                }
+            } catch (e) {
+                console.error('Failed to save report', e);
+            }
         } catch (error) {
             console.error("AI flow error:", error);
             setLoadingState('error');

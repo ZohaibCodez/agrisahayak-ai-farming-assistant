@@ -1,15 +1,31 @@
+"use client";
+
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
-import { mockRecentReports, Report } from "@/lib/data";
+import { Report } from "@/lib/data";
 import { cn } from "@/lib/utils";
 import { MoreHorizontal } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useAuthUser } from "@/hooks/use-auth";
+import { listRecentReports } from "@/lib/repositories";
 
 export default function RecentReports() {
-    const reports = mockRecentReports;
+    const { user } = useAuthUser();
+    const [reports, setReports] = useState<any[]>([]);
+
+    useEffect(() => {
+        let cancel = false;
+        (async () => {
+            if (!user) { setReports([]); return; }
+            const items = await listRecentReports(user.uid, 10);
+            if (!cancel) setReports(items as any);
+        })();
+        return () => { cancel = true; };
+    }, [user]);
 
     const getStatusVariant = (status: Report['status']) => {
         switch (status) {
