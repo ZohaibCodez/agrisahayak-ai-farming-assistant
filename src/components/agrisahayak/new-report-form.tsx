@@ -124,6 +124,7 @@ export default function NewReportForm() {
                     });
                     
                     await updateReport(user.uid, report.id, {
+                        crop: diagnosis.crop, // Update crop with AI-detected crop
                         disease: diagnosis.disease,
                         confidence: diagnosis.confidence,
                         affectedParts: diagnosis.affectedParts,
@@ -160,7 +161,7 @@ export default function NewReportForm() {
                 try {
                     const plan = await generateLocalizedTreatmentPlan({
                         disease: report.disease,
-                        crop: report.crop || 'Unknown', 
+                        crop: report.crop || 'Unknown', // Use AI-detected crop or fallback
                     });
                     
                     await updateReport(user.uid, report.id, { plan: plan as any, status: 'Complete' });
@@ -222,7 +223,7 @@ export default function NewReportForm() {
             // 1. Create initial report document
             console.log("Creating report document...");
             reportId = await createReport(user.uid, {
-                crop: 'Unknown', // This can be updated later
+                crop: profile?.crops?.[0] || 'Crop to be identified', // Use first crop from profile or placeholder
                 symptoms,
                 status: 'Processing',
             } as any);
@@ -324,82 +325,219 @@ export default function NewReportForm() {
     
     if (['starting', 'diagnosing', 'planning'].includes(loadingState)) {
         return (
-            <Card className="flex flex-col items-center justify-center p-12 min-h-[500px]">
-                <LoadingSpinner className="h-16 w-16" />
-                <h2 className="text-2xl font-bold mt-6">{loadingMessages[loadingState as LoadingState]}</h2>
-                <p className="text-muted-foreground mt-2">Our AI is working. This may take a moment.</p>
-                {imagePreview && <Image src={imagePreview} alt="upload preview" width={100} height={100} className="mt-8 rounded-lg opacity-50" />}
-            </Card>
+            <div className="max-w-4xl mx-auto">
+                <div className="mb-8">
+                    <h1 className="text-4xl font-bold font-headline text-gray-900 mb-4">Processing Your Diagnosis</h1>
+                    <p className="text-lg text-gray-600">Our AI is analyzing your crop image and symptoms.</p>
+                </div>
+
+                <Card className="shadow-xl border-0 bg-gradient-to-br from-white to-green-50/30 min-h-[600px] flex flex-col items-center justify-center p-12">
+                    <LoadingSpinner 
+                        message={loadingMessages[loadingState as LoadingState]}
+                        className="mb-8"
+                        size="lg"
+                        variant="agricultural"
+                    />
+                    
+                    <div className="text-center space-y-4">
+                        <h2 className="text-2xl font-bold text-gray-900">
+                            {loadingState === 'starting' && 'Uploading Image...'}
+                            {loadingState === 'diagnosing' && 'Analyzing with AI...'}
+                            {loadingState === 'planning' && 'Creating Treatment Plan...'}
+                        </h2>
+                        <p className="text-gray-600 max-w-md">
+                            {loadingState === 'starting' && 'We\'re securely uploading and processing your image.'}
+                            {loadingState === 'diagnosing' && 'Our AI is examining your crop for diseases and pests.'}
+                            {loadingState === 'planning' && 'Generating a personalized treatment plan for your specific needs.'}
+                        </p>
+                        
+                        {imagePreview && (
+                            <div className="mt-8">
+                                <div className="relative inline-block">
+                                    <Image 
+                                        src={imagePreview} 
+                                        alt="upload preview" 
+                                        width={200} 
+                                        height={150} 
+                                        className="rounded-xl shadow-lg opacity-75" 
+                                    />
+                                    <div className="absolute inset-0 bg-primary/20 rounded-xl"></div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                            <p className="text-sm text-blue-800">
+                                <strong>Tip:</strong> This process usually takes 30-60 seconds. Please don't close this page.
+                            </p>
+                        </div>
+                    </div>
+                </Card>
+            </div>
         );
     }
 
     return (
-        <>
-            <h1 className="text-3xl font-bold font-headline mb-6">Create New Diagnosis Report</h1>
-            <Card>
+        <div className="max-w-4xl mx-auto">
+            <div className="mb-8">
+                <h1 className="text-4xl font-bold font-headline text-gray-900 mb-4">Create New Diagnosis Report</h1>
+                <p className="text-lg text-gray-600">Upload a photo of your crop and describe the symptoms to get an AI-powered diagnosis.</p>
+            </div>
+
+            <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
                 <form onSubmit={handleSubmit}>
-                    <CardHeader>
-                        <CardTitle>Crop Information</CardTitle>
-                        <CardDescription>Upload an image and describe the symptoms to get an AI diagnosis.</CardDescription>
+                    <CardHeader className="pb-6">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                                <Upload className="h-6 w-6 text-primary" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-2xl">Crop Diagnosis Form</CardTitle>
+                                <CardDescription className="text-base">Follow these simple steps to get your AI diagnosis</CardDescription>
+                            </div>
+                        </div>
                     </CardHeader>
-                    <CardContent className="space-y-6">
-                        <div className="space-y-2">
-                            <Label>1. Upload Crop Image</Label>
+                    <CardContent className="space-y-8">
+                        {/* Step 1: Image Upload */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">1</div>
+                                <Label className="text-lg font-semibold">Upload Crop Image</Label>
+                            </div>
+                            
                             {imagePreview ? (
-                                <div className="relative w-fit">
-                                    <Image src={imagePreview} alt="Crop preview" width={200} height={200} className="rounded-lg border" />
-                                    <Button variant="destructive" size="icon" className="absolute -top-3 -right-3 h-8 w-8 rounded-full" onClick={removeImage}>
-                                        <X className="h-4 w-4" />
-                                    </Button>
+                                <div className="relative group">
+                                    <div className="relative w-full max-w-md mx-auto">
+                                        <Image 
+                                            src={imagePreview} 
+                                            alt="Crop preview" 
+                                            width={400} 
+                                            height={300} 
+                                            className="rounded-xl border-2 border-gray-200 shadow-lg object-cover w-full h-64" 
+                                        />
+                                        <Button 
+                                            variant="destructive" 
+                                            size="icon" 
+                                            className="absolute -top-3 -right-3 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" 
+                                            onClick={removeImage}
+                                        >
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                    <p className="text-center text-sm text-gray-500 mt-2">Click the X to remove and upload a different image</p>
                                 </div>
                             ) : (
-                                <div>
-                                    <label htmlFor="image-upload" className="relative flex flex-col items-center justify-center w-full h-48 border-2 border-dashed rounded-lg cursor-pointer bg-muted/50 hover:bg-muted">
-                                        <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                                            <Upload className="w-10 h-10 mb-3 text-muted-foreground" />
-                                            <p className="mb-2 text-sm text-muted-foreground"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                                            <p className="text-xs text-muted-foreground">PNG, JPG (MAX. 10MB)</p>
+                                <div className="space-y-4">
+                                    <label htmlFor="image-upload" className="relative flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all duration-200 group">
+                                        <div className="flex flex-col items-center justify-center pt-8 pb-8">
+                                            <div className="p-4 bg-primary/10 rounded-full mb-4 group-hover:scale-110 transition-transform duration-200">
+                                                <Upload className="w-8 h-8 text-primary" />
+                                            </div>
+                                            <p className="mb-2 text-lg font-semibold text-gray-700">
+                                                <span className="text-primary">Click to upload</span> or drag and drop
+                                            </p>
+                                            <p className="text-sm text-gray-500">PNG, JPG (MAX. 10MB)</p>
+                                            <p className="text-xs text-gray-400 mt-2">For best results, ensure good lighting and clear focus</p>
                                         </div>
                                     </label>
-                                    <Input id="image-upload" type="file" className="hidden" accept="image/png, image/jpeg" onChange={handleImageChange} />
+                                    <Input 
+                                        id="image-upload" 
+                                        type="file" 
+                                        className="hidden" 
+                                        accept="image/png, image/jpeg" 
+                                        onChange={handleImageChange} 
+                                    />
                                 </div>
                             )}
                         </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="symptoms">2. Observed Symptoms</Label>
-                            <Textarea
-                                id="symptoms"
-                                placeholder="e.g., Yellow spots on leaves, wilting, stunted growth..."
-                                value={symptoms}
-                                onChange={(e) => setSymptoms(e.target.value)}
-                                rows={4}
-                                maxLength={500}
-                            />
-                            <p className="text-xs text-muted-foreground text-right">{symptoms.length} / 500</p>
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>3. Location</Label>
-                            <div className="flex items-center p-3 rounded-md border bg-muted/50">
-                                <MapPin className="h-5 w-5 mr-3 text-muted-foreground" />
-                                <span className="text-sm">{profile?.location || "Faisalabad, Punjab (auto-detected)"}</span>
+                        {/* Step 2: Symptoms Description */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">2</div>
+                                <Label htmlFor="symptoms" className="text-lg font-semibold">Describe the Symptoms</Label>
+                            </div>
+                            
+                            <div className="space-y-3">
+                                <Textarea
+                                    id="symptoms"
+                                    placeholder="Describe what you observe: yellow spots on leaves, wilting, stunted growth, unusual patterns, etc. Be as detailed as possible for better diagnosis."
+                                    value={symptoms}
+                                    onChange={(e) => setSymptoms(e.target.value)}
+                                    rows={5}
+                                    maxLength={500}
+                                    className="text-base border-2 border-gray-200 focus:border-primary transition-colors rounded-xl resize-none"
+                                />
+                                <div className="flex justify-between items-center text-sm">
+                                    <p className="text-gray-500">Include details about affected areas, timing, and any other observations</p>
+                                    <span className={`font-medium ${symptoms.length > 450 ? 'text-red-500' : 'text-gray-400'}`}>
+                                        {symptoms.length} / 500
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
-                         {error && (
-                            <div className="p-4 bg-destructive/10 text-destructive text-sm rounded-md">
-                                <p className="font-bold">An Error Occurred</p>
-                                <p>{error}</p>
+                        {/* Step 3: Location */}
+                        <div className="space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
+                                <Label className="text-lg font-semibold">Location Information</Label>
+                            </div>
+                            
+                            <div className="flex items-center p-4 rounded-xl border-2 border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
+                                <MapPin className="h-6 w-6 text-primary mr-4" />
+                                <div>
+                                    <p className="font-medium text-gray-900">{profile?.location || "Faisalabad, Punjab"}</p>
+                                    <p className="text-sm text-gray-600">Auto-detected from your profile</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Error Display */}
+                        {error && (
+                            <div className="p-4 bg-red-50 border-2 border-red-200 text-red-800 text-sm rounded-xl">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-1 bg-red-100 rounded-full">
+                                        <X className="h-4 w-4" />
+                                    </div>
+                                    <div>
+                                        <p className="font-bold">An Error Occurred</p>
+                                        <p className="mt-1">{error}</p>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
-                        <Button type="submit" size="lg" className="w-full" disabled={!imageFile || isUserLoading || loadingState !== 'idle'}>
-                            Get AI Diagnosis
-                        </Button>
+                        {/* Submit Button */}
+                        <div className="pt-6">
+                            <Button 
+                                type="submit" 
+                                size="lg" 
+                                className="w-full bg-primary hover:bg-primary/90 text-lg py-6 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed" 
+                                disabled={!imageFile || isUserLoading || loadingState !== 'idle'}
+                            >
+                                {loadingState === 'idle' ? (
+                                    <>
+                                        <Upload className="mr-2 h-5 w-5" />
+                                        Get AI Diagnosis
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                        Processing...
+                                    </>
+                                )}
+                            </Button>
+                            
+                            {!imageFile && (
+                                <p className="text-center text-sm text-gray-500 mt-3">
+                                    Please upload an image to continue
+                                </p>
+                            )}
+                        </div>
                     </CardContent>
                 </form>
             </Card>
-        </>
+        </div>
     );
 }

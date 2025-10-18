@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
+import { Bot, AlertTriangle, Leaf } from "lucide-react";
 
 type DiagnosisCardProps = {
     diagnosis: InstantDiagnosisFromImageAndSymptomsOutput;
@@ -25,44 +26,94 @@ export default function DiagnosisCard({ diagnosis, imageUrl }: DiagnosisCardProp
     };
     
     return (
-        <Card className="overflow-hidden">
-            <CardHeader>
-                <CardTitle className="text-2xl">AI Diagnosis: {diagnosis.disease}</CardTitle>
-                <CardDescription>Generated on {new Date().toLocaleString()}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="md:col-span-1">
-                        <Image
-                            src={imageUrl}
-                            alt="Uploaded crop"
-                            width={400}
-                            height={400}
-                            className="rounded-lg object-cover w-full aspect-square"
-                            data-ai-hint="crop disease"
-                        />
+        <Card className="overflow-hidden shadow-xl border-0 bg-gradient-to-br from-white to-green-50/30">
+            <CardHeader className="bg-gradient-to-r from-primary/5 to-emerald-50 border-b border-primary/10">
+                <div className="flex items-center gap-3">
+                    <div className="p-2 bg-primary/10 rounded-lg">
+                        <Bot className="h-6 w-6 text-primary" />
                     </div>
-                    <div className="md:col-span-2 space-y-4">
-                        <div className={cn("p-4 rounded-lg border", getConfidenceColor(diagnosis.confidence))}>
-                            <p className="text-sm font-medium">Confidence Score</p>
-                            <p className="text-4xl font-bold">{diagnosis.confidence}%</p>
+                    <div>
+                        <CardTitle className="text-2xl text-gray-900">AI Diagnosis: {diagnosis.disease}</CardTitle>
+                        <CardDescription className="text-base">
+                            Crop: <span className="font-semibold text-primary">{diagnosis.crop}</span> • Generated on {new Date().toLocaleString()}
+                        </CardDescription>
+                    </div>
+                </div>
+            </CardHeader>
+            <CardContent className="p-8">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Image Section */}
+                    <div className="space-y-4">
+                        <div className="relative group">
+                            <Image
+                                src={imageUrl}
+                                alt="Uploaded crop"
+                                width={500}
+                                height={400}
+                                className="rounded-xl object-cover w-full h-80 shadow-lg group-hover:shadow-xl transition-shadow duration-300"
+                                data-ai-hint="crop disease"
+                            />
+                            <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-1">
+                                <span className="text-sm font-medium text-gray-700">Crop Image</span>
+                            </div>
                         </div>
-                        <div>
-                            <h3 className="font-semibold mb-2">Details</h3>
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Severity:</span>
-                                    <Badge variant={getSeverityVariant(diagnosis.severity)}>{diagnosis.severity}</Badge>
+                    </div>
+
+                    {/* Diagnosis Details */}
+                    <div className="space-y-6">
+                        {/* Confidence Score */}
+                        <div className={cn("p-6 rounded-xl border-2 shadow-lg", getConfidenceColor(diagnosis.confidence))}>
+                            <div className="flex items-center justify-between mb-4">
+                                <p className="text-lg font-semibold">Confidence Score</p>
+                                <div className="w-16 h-16 bg-white/50 rounded-full flex items-center justify-center">
+                                    <span className="text-2xl font-bold">{diagnosis.confidence}%</span>
                                 </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Affected Parts:</span>
-                                    <span className="font-medium text-right">{diagnosis.affectedParts.join(', ')}</span>
+                            </div>
+                            <div className="w-full bg-white/30 rounded-full h-3">
+                                <div 
+                                    className="bg-current h-3 rounded-full transition-all duration-1000 ease-out"
+                                    style={{ width: `${diagnosis.confidence}%` }}
+                                ></div>
+                            </div>
+                        </div>
+
+                        {/* Severity and Affected Parts */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="p-4 bg-gray-50 rounded-xl">
+                                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    Severity Level
+                                </h4>
+                                <Badge 
+                                    variant={getSeverityVariant(diagnosis.severity)} 
+                                    className="text-sm px-3 py-1"
+                                >
+                                    {diagnosis.severity}
+                                </Badge>
+                            </div>
+                            
+                            <div className="p-4 bg-gray-50 rounded-xl">
+                                <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                                    <Leaf className="h-4 w-4" />
+                                    Affected Parts
+                                </h4>
+                                <div className="flex flex-wrap gap-1">
+                                    {diagnosis.affectedParts.map((part, index) => (
+                                        <Badge key={index} variant="outline" className="text-xs">
+                                            {part}
+                                        </Badge>
+                                    ))}
                                 </div>
                             </div>
                         </div>
-                         <div>
-                            <h3 className="font-semibold mb-2">Description</h3>
-                            <p className="text-sm text-muted-foreground">{diagnosis.description}</p>
+
+                        {/* Description */}
+                        <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                            <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                                <Bot className="h-4 w-4" />
+                                AI Analysis
+                            </h4>
+                            <p className="text-gray-700 leading-relaxed">{diagnosis.description}</p>
                         </div>
                     </div>
                 </div>
