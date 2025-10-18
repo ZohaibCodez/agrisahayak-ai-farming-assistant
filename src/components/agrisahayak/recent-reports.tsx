@@ -21,8 +21,13 @@ export default function RecentReports() {
         let cancel = false;
         (async () => {
             if (!user) { setReports([]); return; }
-            const items = await listRecentReports(user.uid, 10);
-            if (!cancel) setReports(items as any);
+            try {
+                const items = await listRecentReports(user.uid, 10);
+                console.log('Fetched reports:', items);
+                if (!cancel) setReports(items as any);
+            } catch (error) {
+                console.error('Error fetching reports:', error);
+            }
         })();
         return () => { cancel = true; };
     }, [user]);
@@ -69,11 +74,11 @@ export default function RecentReports() {
                                         />
                                     </TableCell>
                                     <TableCell className="font-medium">{report.crop}</TableCell>
-                                    <TableCell>{report.diagnosis}</TableCell>
+                                    <TableCell>{report.disease}</TableCell>
                                     <TableCell>
                                         <Badge variant={getStatusVariant(report.status)}>{report.status}</Badge>
                                     </TableCell>
-                                    <TableCell>{report.date}</TableCell>
+                                    <TableCell>{report.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown'}</TableCell>
                                     <TableCell className="text-right">
                                         <Button asChild variant="ghost" size="sm">
                                             <Link href={`/report/${report.id}`}>View</Link>

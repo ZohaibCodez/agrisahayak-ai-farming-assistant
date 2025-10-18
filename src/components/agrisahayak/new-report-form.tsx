@@ -101,7 +101,12 @@ export default function NewReportForm() {
                         affectedParts: diagnosis.affectedParts,
                         severity: diagnosis.severity,
                         description: diagnosis.description,
-                        plan: { totalCost: plan.totalCost, timeline: plan.timeline },
+                        plan: {
+                            steps: plan.steps,
+                            totalCost: plan.totalCost,
+                            timeline: plan.timeline,
+                            preventionTips: plan.preventionTips,
+                        },
                     } as any);
                 }
             } catch (e) {
