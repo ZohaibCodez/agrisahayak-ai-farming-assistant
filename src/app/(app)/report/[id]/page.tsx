@@ -15,6 +15,10 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { getDoc, doc } from "firebase/firestore";
 import { useFirebase } from "@/firebase";
 import LoadingSpinner from "@/components/agrisahayak/loading-spinner";
+import { useToast } from '@/hooks/use-toast';
+import { instantDiagnosisFromImageAndSymptoms } from '@/ai/flows/instant-diagnosis-from-image-and-symptoms';
+import { generateLocalizedTreatmentPlan } from '@/ai/flows/localized-treatment-plans';
+import { updateReport, createLog } from '@/lib/repositories';
 import { useParams } from 'next/navigation';
 
 export default function ReportDetailPage() {
@@ -22,6 +26,7 @@ export default function ReportDetailPage() {
     const { db } = useFirebase();
     const [report, setReport] = useState<DiagnosisReport | null>(null);
     const [loading, setLoading] = useState(true);
+    const { toast } = useToast();
     
     const params = useParams();
     const reportId = params.id as string;
@@ -53,6 +58,60 @@ export default function ReportDetailPage() {
         fetchReport();
         return () => { cancel = true; };
     }, [user, reportId, db]);
+
+    // Helper: fetch image URL (or imageThumb) and convert to data URI
+    async function urlToDataUri(url: string) {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Failed to fetch image');
+        const blob = await res.blob();
+        return await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    const handleRetryDiagnosis = async () => {
+        if (!user || !report) return;
+        setLoading(true);
+        try {
+            await createLog({ agentName: 'diagnosticAgent', action: 'retry_started', reportId: report.id, status: 'info' });
+            // Choose source: imageUrl -> imageThumb
+            const src = report.imageUrl || report.imageThumb;
+            if (!src) throw new Error('No image available for diagnosis');
+
+            const photoDataUri = src.startsWith('data:') ? src : await urlToDataUri(src);
+
+            // Re-run diagnosis
+            const diagnosis = await instantDiagnosisFromImageAndSymptoms({ photoDataUri, symptoms: report.symptoms || '' });
+            await updateReport(user.uid, report.id, {
+                disease: diagnosis.disease,
+                confidence: diagnosis.confidence,
+                affectedParts: diagnosis.affectedParts,
+                severity: diagnosis.severity,
+                description: diagnosis.description,
+                status: 'Processing'
+            } as any);
+
+            await createLog({ agentName: 'diagnosticAgent', action: 'retry_completed', reportId: report.id, status: 'success', payload: diagnosis });
+
+            // Re-run planning
+            const plan = await generateLocalizedTreatmentPlan({ disease: diagnosis.disease, crop: report.crop || 'Unknown' });
+            await updateReport(user.uid, report.id, { plan: plan as any, status: 'Complete' } as any);
+            await createLog({ agentName: 'actionPlannerAgent', action: 'retry_planning_completed', reportId: report.id, status: 'success', payload: plan });
+
+            // Refresh local copy
+            setReport(prev => prev ? { ...prev, ...diagnosis, plan, status: 'Complete' } as DiagnosisReport : prev);
+            toast({ title: 'Retry Successful', description: 'Diagnosis and plan updated.', className: 'bg-green-100 text-green-800' });
+        } catch (err: any) {
+            console.error('Retry failed:', err);
+            await createLog({ agentName: 'diagnosticAgent', action: 'retry_failed', reportId: report?.id, status: 'error', payload: { error: err?.message || String(err) } });
+            toast({ title: 'Retry Failed', description: 'Could not complete diagnosis. Try again later.', variant: 'destructive' });
+        } finally {
+            setLoading(false);
+        }
+    };
 
     if (loading) {
         return (
@@ -137,6 +196,11 @@ export default function ReportDetailPage() {
                         <div className="flex gap-2">
                             {report.severity && <Badge variant={getSeverityVariant(report.severity)}>{report.severity} Severity</Badge>}
                             <Badge variant="outline">{report.status}</Badge>
+                            {report.status === 'Pending' && (
+                                <Button size="sm" variant="ghost" onClick={handleRetryDiagnosis} disabled={loading}>
+                                    Retry Diagnosis
+                                </Button>
+                            )}
                         </div>
                     </div>
                 </CardHeader>

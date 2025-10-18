@@ -6,6 +6,8 @@ export type UserProfile = {
   phone: string;
   name?: string;
   location?: string;
+  lat?: number;
+  lon?: number;
   language?: 'english' | 'urdu';
   crops?: string[];
   createdAt: any; // Firestore serverTimestamp
@@ -26,6 +28,8 @@ export type DiagnosisReport = {
   id: string;
   uid:string;
   crop?: string;
+  imageThumb?: string;
+  symptoms?: string;
   imageUrl?: string; // storage url or data url persisted elsewhere
   disease: string;
   confidence: number; // 0-100
@@ -38,7 +42,7 @@ export type DiagnosisReport = {
     timeline: string;
     preventionTips: string[];
   };
-  status: 'Complete' | 'Processing' | 'Error';
+  status: 'Complete' | 'Processing' | 'Error' | 'Pending';
   createdAt: any;
   updatedAt: any;
 };

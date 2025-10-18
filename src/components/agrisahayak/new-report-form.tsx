@@ -17,8 +17,8 @@ import DiagnosisCard from './diagnosis-card';
 import TreatmentPlanCard from './treatment-plan-card';
 import SuppliersCard from './suppliers-card';
 import { useAuth } from '@/firebase';
-import { createReport, createLog, uploadReportImage, updateReport } from '@/lib/repositories';
-import { DiagnosisReport } from '@/lib/models';
+import { createReport, createLog, uploadReportImage, updateReport, getProfile } from '@/lib/repositories';
+import { DiagnosisReport, UserProfile } from '@/lib/models';
 
 type LoadingState = 'idle' | 'starting' | 'diagnosing' | 'planning' | 'done' | 'error';
 type LoadingMessages = { [key in LoadingState]?: string };
@@ -38,6 +38,57 @@ function fileToDataUri(file: File): Promise<string> {
     });
 }
 
+// Compress an image File using an offscreen canvas and return a Blob
+async function compressImage(file: File, maxWidth = 1024, quality = 0.8): Promise<Blob> {
+    return new Promise(async (resolve, reject) => {
+        try {
+            const img = document.createElement('img') as HTMLImageElement;
+            img.onload = () => {
+                try {
+                    const ratio = Math.min(1, maxWidth / img.width);
+                    const width = Math.round(img.width * ratio);
+                    const height = Math.round(img.height * ratio);
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) throw new Error('Canvas context not available');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    canvas.toBlob(
+                        blob => {
+                            if (!blob) return reject(new Error('Compression toBlob returned null'));
+                            resolve(blob);
+                        },
+                        file.type === 'image/png' ? 'image/png' : 'image/jpeg',
+                        quality
+                    );
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            img.onerror = () => reject(new Error('Failed to load image for compression'));
+            // Use object URL to avoid base64 memory usage
+            const url = URL.createObjectURL(file);
+            img.src = url;
+            // revoke later
+            img.addEventListener('load', () => URL.revokeObjectURL(url));
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+// Create a small thumbnail data URI (safe for Firestore) -- keep under ~200KB
+async function createThumbnailDataUri(file: File, maxWidth = 480, quality = 0.65): Promise<string> {
+    const blob = await compressImage(file, maxWidth, quality);
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
 export default function NewReportForm() {
     const { user, isUserLoading } = useAuth();
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -45,9 +96,19 @@ export default function NewReportForm() {
     const [symptoms, setSymptoms] = useState('');
     const [loadingState, setLoadingState] = useState<LoadingState>('idle');
     const [error, setError] = useState<string | null>(null);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
 
     const [report, setReport] = useState<DiagnosisReport | null>(null);
     const { toast } = useToast();
+
+    // Fetch user profile when user changes
+    useEffect(() => {
+        if (user) {
+            getProfile(user.uid).then(setProfile);
+        } else {
+            setProfile(null);
+        }
+    }, [user]);
 
     // Effect to run the diagnostic agent
     useEffect(() => {
@@ -76,9 +137,15 @@ export default function NewReportForm() {
                     setLoadingState('planning');
                 } catch (e: any) {
                     console.error("Diagnostic agent error:", e);
-                    await createLog({ agentName: 'diagnosticAgent', action: 'diagnosis_failed', reportId: report.id, status: 'error', duration: Date.now() - startTime, payload: { error: e.message } });
-                    setError("AI Diagnosis Failed. Please try again.");
-                    setLoadingState('error');
+                        // Mark the report as pending for background retry and create an error log
+                        try {
+                            await updateReport(user.uid, report.id, { status: 'Pending' } as any);
+                        } catch (updateErr) {
+                            console.warn('Failed to mark report Pending:', updateErr);
+                        }
+                        await createLog({ agentName: 'diagnosticAgent', action: 'diagnosis_failed', reportId: report.id, status: 'error', duration: Date.now() - startTime, payload: { error: e?.message || String(e) } });
+                        setError("AI service is temporarily unavailable. We've saved your report and will retry diagnosis. Please check back in a few minutes or try again.");
+                        setLoadingState('idle');
                 }
             })();
         }
@@ -150,38 +217,82 @@ export default function NewReportForm() {
         let reportId = '';
 
         try {
+            console.log("Starting report creation process...");
+            
             // 1. Create initial report document
+            console.log("Creating report document...");
             reportId = await createReport(user.uid, {
                 crop: 'Unknown', // This can be updated later
                 symptoms,
                 status: 'Processing',
             } as any);
+            console.log("Report created with ID:", reportId);
 
             await createLog({ agentName: 'ingestAgent', action: 'report_created', reportId, status: 'success' });
             
-            // 2. Upload image
-            const imageUrl = await uploadReportImage(user.uid, reportId, imageFile);
+            // 2. Compress and upload image
+            console.log("Starting image compression + upload...");
+            let imageUrl: string | null = null;
+            try {
+                // Compress image to reduce size before upload
+                const compressedBlob = await compressImage(imageFile, 1024, 0.8);
+                const compressedFile = new File([compressedBlob], imageFile.name, { type: compressedBlob.type });
+                imageUrl = await uploadReportImage(user.uid, reportId, compressedFile);
+                console.log("Image uploaded successfully:", imageUrl);
+            } catch (uploadError: any) {
+                console.warn("Firebase Storage upload failed after compression:", uploadError?.message ?? uploadError);
+                // As fallback, create a small thumbnail data URI and store that under imageThumb to avoid large Firestore writes
+                try {
+                    const thumbDataUri = await createThumbnailDataUri(imageFile, 480, 0.65);
+                    console.log("Generated thumbnail data URI (length):", thumbDataUri.length);
+                    // store thumbnail instead of full image data URI in the report
+                    await updateReport(user.uid, reportId, { imageThumb: thumbDataUri } as any);
+                    imageUrl = thumbDataUri; // keep imageUrl as the thumbnail for client preview
+                    await createLog({ agentName: 'ingestAgent', action: 'thumbnail_stored', reportId, status: 'info', payload: { length: thumbDataUri.length } });
+                } catch (thumbErr: any) {
+                    console.error("Thumbnail fallback failed:", thumbErr);
+                    // If thumbnail creation also fails, remove the report and surface an error to the user
+                    setError('Image upload failed and fallback could not be completed. Please try a smaller image (less than 2MB) or check your connection.');
+                    setLoadingState('error');
+                    await createLog({ agentName: 'ingestAgent', action: 'ingestion_failed', reportId, status: 'error', payload: { error: String(thumbErr) } });
+                    return;
+                }
+            }
             
-            // 3. Update report with image URL
-            await updateReport(user.uid, reportId, { imageUrl });
+            // 3. Update report with image URL if it's a real URL; otherwise `imageThumb` was already stored
+            console.log("Updating report with image reference...");
+            if (imageUrl && !imageUrl.startsWith('data:')) {
+                await updateReport(user.uid, reportId, { imageUrl });
+            } else {
+                // imageThumb already stored in fallback path above
+                console.log('Using thumbnail stored in report as image reference.');
+            }
 
             setReport({ id: reportId, imageUrl, symptoms } as any);
 
+            // Avoid storing full data URIs in logs/firestore. If imageUrl is a data URI use metadata only.
+            const isDataUri = typeof imageUrl === 'string' && imageUrl.startsWith('data:');
             await createLog({
                 agentName: 'ingestAgent',
                 action: 'image_uploaded',
                 reportId: reportId,
                 status: 'success',
                 duration: Date.now() - startTime,
-                payload: { imageUrl, symptoms }
+                payload: isDataUri ? { imageThumbSize: imageUrl.length, symptoms } : { imageUrl, symptoms }
             });
 
+            console.log("Hagnosis state...");
             // 4. Trigger the first agent
             setLoadingState('diagnosing');
 
         } catch (error: any) {
             console.error("Submission error:", error);
-            setError("Failed to start the diagnosis process. Check your connection and try again.");
+            console.error("Error details:", {
+                message: error.message,
+                code: error.code,
+                stack: error.stack
+            });
+            setError(`Failed to start the diagnosis process: ${error.message}. Check your connection and try again.`);
             setLoadingState('error');
             if (reportId) {
                 await createLog({ agentName: 'ingestAgent', action: 'ingestion_failed', reportId, status: 'error', payload: { error: error.message } });
@@ -272,7 +383,7 @@ export default function NewReportForm() {
                             <Label>3. Location</Label>
                             <div className="flex items-center p-3 rounded-md border bg-muted/50">
                                 <MapPin className="h-5 w-5 mr-3 text-muted-foreground" />
-                                <span className="text-sm">{user?.location || "Faisalabad, Punjab (auto-detected)"}</span>
+                                <span className="text-sm">{profile?.location || "Faisalabad, Punjab (auto-detected)"}</span>
                             </div>
                         </div>
 

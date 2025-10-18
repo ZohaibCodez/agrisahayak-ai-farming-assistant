@@ -81,7 +81,7 @@ export default function RecentReports() {
                                 <TableRow key={report.id}>
                                     <TableCell>
                                         <Image
-                                            src={report.imageUrl || "https://picsum.photos/seed/placeholder/100/100"}
+                                            src={report.imageUrl || report.imageThumb || "https://picsum.photos/seed/placeholder/100/100"}
                                             alt={report.crop || "Crop image"}
                                             width={50}
                                             height={50}
@@ -89,7 +89,13 @@ export default function RecentReports() {
                                             data-ai-hint="crop plant"
                                         />
                                     </TableCell>
-                                    <TableCell className="font-medium">{report.crop || 'N/A'}</TableCell>
+                                    <TableCell className="font-medium">
+                                        {report.crop && report.crop !== 'Unknown' ? (
+                                            report.crop
+                                        ) : (
+                                            <span className="text-muted-foreground">Unknown crop — <Link href={`/report/${report.id}`}>View</Link></span>
+                                        )}
+                                    </TableCell>
                                     <TableCell>{report.disease || 'N/A'}</TableCell>
                                     <TableCell>
                                         <Badge variant={getStatusVariant(report.status)}>{report.status}</Badge>
