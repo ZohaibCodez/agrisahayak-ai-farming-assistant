@@ -390,7 +390,7 @@ export default function NewReportForm() {
                             </p>
                         </div>
                     </div>
-                </Card>
+            </Card>
             </div>
         );
     }
@@ -439,8 +439,8 @@ export default function NewReportForm() {
                                             className="absolute -top-3 -right-3 h-8 w-8 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity" 
                                             onClick={removeImage}
                                         >
-                                            <X className="h-4 w-4" />
-                                        </Button>
+                                        <X className="h-4 w-4" />
+                                    </Button>
                                     </div>
                                     <p className="text-center text-sm text-gray-500 mt-2">Click the X to remove and upload a different image</p>
                                 </div>
@@ -477,13 +477,13 @@ export default function NewReportForm() {
                             </div>
                             
                             <div className="space-y-3">
-                                <Textarea
-                                    id="symptoms"
+                            <Textarea
+                                id="symptoms"
                                     placeholder="Describe what you observe: yellow spots on leaves, wilting, stunted growth, unusual patterns, etc. Be as detailed as possible for better diagnosis."
-                                    value={symptoms}
-                                    onChange={(e) => setSymptoms(e.target.value)}
+                                value={symptoms}
+                                onChange={(e) => setSymptoms(e.target.value)}
                                     rows={5}
-                                    maxLength={500}
+                                maxLength={500}
                                     className="text-base border-2 border-gray-200 focus:border-primary transition-colors rounded-xl resize-none"
                                 />
                                 <div className="flex justify-between items-center text-sm">
@@ -500,8 +500,8 @@ export default function NewReportForm() {
                             <div className="flex items-center gap-3">
                                 <div className="w-8 h-8 bg-primary text-white rounded-full flex items-center justify-center text-sm font-bold">3</div>
                                 <Label className="text-lg font-semibold">Location Information</Label>
-                            </div>
-                            
+                        </div>
+
                             <div className="flex items-center p-4 rounded-xl border-2 border-gray-200 bg-gradient-to-r from-green-50 to-emerald-50">
                                 <MapPin className="h-6 w-6 text-primary mr-4" />
                                 <div>
@@ -512,14 +512,14 @@ export default function NewReportForm() {
                         </div>
 
                         {/* Error Display */}
-                        {error && (
+                         {error && (
                             <div className="p-4 bg-red-50 border-2 border-red-200 text-red-800 text-sm rounded-xl">
                                 <div className="flex items-start gap-3">
                                     <div className="p-1 bg-red-100 rounded-full">
                                         <X className="h-4 w-4" />
                                     </div>
                                     <div>
-                                        <p className="font-bold">An Error Occurred</p>
+                                <p className="font-bold">An Error Occurred</p>
                                         <p className="mt-1">{error}</p>
                                     </div>
                                 </div>
@@ -537,7 +537,7 @@ export default function NewReportForm() {
                                 {loadingState === 'idle' ? (
                                     <>
                                         <Upload className="mr-2 h-5 w-5" />
-                                        Get AI Diagnosis
+                            Get AI Diagnosis
                                     </>
                                 ) : (
                                     <>
@@ -545,7 +545,7 @@ export default function NewReportForm() {
                                         Processing...
                                     </>
                                 )}
-                            </Button>
+                        </Button>
                             
                             {!imageFile && (
                                 <p className="text-center text-sm text-gray-500 mt-3">
