@@ -12,6 +12,8 @@ import { Upload, X, MapPin } from 'lucide-react';
 import { instantDiagnosisFromImageAndSymptoms, InstantDiagnosisFromImageAndSymptomsOutput } from '@/ai/flows/instant-diagnosis-from-image-and-symptoms';
 import { generateLocalizedTreatmentPlan, LocalizedTreatmentPlanOutput } from '@/ai/flows/localized-treatment-plans';
 import LoadingSpinner from './loading-spinner';
+import { ProgressSteps } from "@/components/ui/progress-enhanced";
+import { SkeletonForm } from "@/components/ui/skeleton-enhanced";
 import { useToast } from "@/hooks/use-toast";
 import DiagnosisCard from './diagnosis-card';
 import TreatmentPlanCard from './treatment-plan-card';
@@ -324,6 +326,10 @@ export default function NewReportForm() {
     }
     
     if (['starting', 'diagnosing', 'planning'].includes(loadingState)) {
+        const steps = ['Upload Image', 'AI Analysis', 'Treatment Plan'];
+        const currentStepIndex = loadingState === 'starting' ? 0 : loadingState === 'diagnosing' ? 1 : 2;
+        const progress = ((currentStepIndex + 1) / steps.length) * 100;
+
         return (
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
@@ -332,15 +338,26 @@ export default function NewReportForm() {
                 </div>
 
                 <Card className="shadow-xl border-0 bg-gradient-to-br from-white to-green-50/30 min-h-[600px] flex flex-col items-center justify-center p-12">
+                    {/* Progress Steps */}
+                    <div className="w-full max-w-md mb-8">
+                        <ProgressSteps 
+                            steps={steps} 
+                            currentStep={currentStepIndex + 1}
+                            className="mb-6"
+                        />
+                    </div>
+
                     <LoadingSpinner 
                         message={loadingMessages[loadingState as LoadingState]}
                         className="mb-8"
                         size="lg"
                         variant="agricultural"
+                        showProgress={true}
+                        progress={progress}
                     />
                     
                     <div className="text-center space-y-4">
-                        <h2 className="text-2xl font-bold text-gray-900">
+                        <h2 className="text-2xl font-bold text-gray-900 animate-pulse">
                             {loadingState === 'starting' && 'Uploading Image...'}
                             {loadingState === 'diagnosing' && 'Analyzing with AI...'}
                             {loadingState === 'planning' && 'Creating Treatment Plan...'}
@@ -353,20 +370,21 @@ export default function NewReportForm() {
                         
                         {imagePreview && (
                             <div className="mt-8">
-                                <div className="relative inline-block">
+                                <div className="relative inline-block group">
                                     <Image 
                                         src={imagePreview} 
                                         alt="upload preview" 
                                         width={200} 
                                         height={150} 
-                                        className="rounded-xl shadow-lg opacity-75" 
+                                        className="rounded-xl shadow-lg opacity-75 group-hover:opacity-100 transition-opacity duration-300" 
                                     />
-                                    <div className="absolute inset-0 bg-primary/20 rounded-xl"></div>
+                                    <div className="absolute inset-0 bg-primary/20 rounded-xl group-hover:bg-primary/10 transition-colors duration-300"></div>
+                                    <div className="absolute inset-0 rounded-xl border-2 border-primary/30 animate-pulse"></div>
                                 </div>
                             </div>
                         )}
                         
-                        <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                        <div className="mt-8 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-xl border border-blue-200 animate-pulse">
                             <p className="text-sm text-blue-800">
                                 <strong>Tip:</strong> This process usually takes 30-60 seconds. Please don't close this page.
                             </p>

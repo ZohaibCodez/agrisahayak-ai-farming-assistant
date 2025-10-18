@@ -11,6 +11,7 @@ import { useAuth } from "@/firebase";
 import { getProfile, listRecentReports } from "@/lib/repositories";
 import { useEffect, useState } from "react";
 import { UserProfile, DiagnosisReport } from "@/lib/models";
+import { SkeletonDashboard } from "@/components/ui/skeleton-enhanced";
 
 export default function DashboardPage() {
     const { user } = useAuth();
@@ -34,8 +35,12 @@ export default function DashboardPage() {
     const successRate = totalReports > 0 ? Math.round((completedReports / totalReports) * 100) : 0;
     const highSeverityReports = recentReports.filter(r => r.severity === 'High').length;
 
+    if (loading) {
+        return <SkeletonDashboard />;
+    }
+
     return (
-        <div className="space-y-8">
+        <div className="space-y-8 animate-in fade-in-50 duration-500">
             {/* Enhanced Welcome Section */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-8 border border-green-100">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -188,15 +193,15 @@ function StatCard({
     };
 
     return (
-        <Card className="hover:shadow-lg transition-shadow duration-200">
+        <Card className="hover:shadow-lg hover:scale-105 transition-all duration-300 group cursor-pointer">
             <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                     <div>
-                        <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
-                        <p className="text-3xl font-bold text-gray-900">{value}</p>
-                        <p className="text-xs text-gray-500 mt-1">{trend}</p>
+                        <p className="text-sm font-medium text-gray-600 mb-1 group-hover:text-gray-800 transition-colors">{title}</p>
+                        <p className="text-3xl font-bold text-gray-900 group-hover:text-primary transition-colors">{value}</p>
+                        <p className="text-xs text-gray-500 mt-1 group-hover:text-gray-600 transition-colors">{trend}</p>
                     </div>
-                    <div className={`p-3 rounded-lg ${colorClasses[color as keyof typeof colorClasses]}`}>
+                    <div className={`p-3 rounded-lg group-hover:scale-110 transition-transform duration-300 ${colorClasses[color as keyof typeof colorClasses]}`}>
                         {icon}
                     </div>
                 </div>
