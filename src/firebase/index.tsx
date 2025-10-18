@@ -17,6 +17,7 @@ interface FirebaseContextType {
 interface AuthContextType {
   user: User | null;
   isUserLoading: boolean;
+  auth: Auth;
 }
 
 // 2. Create the contexts
@@ -76,7 +77,7 @@ function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [firebase]);
 
   return (
-    <AuthContext.Provider value={{ user, isUserLoading }}>
+    <AuthContext.Provider value={{ user, isUserLoading, auth: firebase.auth }}>
       {children}
     </AuthContext.Provider>
   );
