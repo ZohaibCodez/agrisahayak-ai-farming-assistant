@@ -1,30 +1,37 @@
+
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { proactiveWeatherAlertsWithRecommendations, WeatherAlertsOutput } from "@/ai/flows/proactive-weather-alerts-with-recommendations";
 import LoadingSpinner from "./loading-spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb, Sun, CloudRain, Snowflake, AlertTriangle, Wind } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/firebase";
+import { getProfile } from "@/lib/repositories";
+import { UserProfile } from "@/lib/models";
 
 export default function WeatherAlertCard() {
-    const [crop, setCrop] = useState('');
-    const [weather, setWeather] = useState('');
+    const { user } = useAuth();
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState<WeatherAlertsOutput | null>(null);
     const { toast } = useToast();
 
+    useEffect(() => {
+        if (user && !profile) {
+            getProfile(user.uid).then(setProfile);
+        }
+    }, [user, profile]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!crop || !weather) {
+        if (!profile || !profile.crops || profile.crops.length === 0) {
             toast({
                 title: 'Missing Information',
-                description: 'Please select a crop and enter weather conditions.',
+                description: 'Please set your location and crops in your profile to get weather alerts.',
                 variant: 'destructive',
             });
             return;
@@ -33,11 +40,14 @@ export default function WeatherAlertCard() {
         setLoading(true);
         setResult(null);
 
+        // This is a placeholder for a real weather API call.
+        const mockWeatherConditions = "High humidity with a chance of rain in the evening.";
+
         try {
             const response = await proactiveWeatherAlertsWithRecommendations({
-                location: "Faisalabad, Punjab",
-                crops: [crop],
-                weatherConditions: weather,
+                location: profile.location || "Unknown location",
+                crops: profile.crops,
+                weatherConditions: mockWeatherConditions,
             });
             setResult(response);
         } catch (error) {
@@ -73,34 +83,24 @@ export default function WeatherAlertCard() {
         <Card>
             <CardHeader>
                 <CardTitle>Proactive Weather Alerts</CardTitle>
-                <CardDescription>Get AI-powered recommendations based on current weather conditions.</CardDescription>
+                {profile ? (
+                    <CardDescription>
+                        Using your location ({profile.location}) and crops ({profile.crops?.join(', ') || 'None'}) to check for alerts.
+                    </CardDescription>
+                ) : (
+                    <CardDescription>
+                        Update your profile to get personalized weather alerts.
+                    </CardDescription>
+                )}
             </CardHeader>
             <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="crop">Select Crop</Label>
-                            <Select onValueChange={setCrop} value={crop}>
-                                <SelectTrigger id="crop">
-                                    <SelectValue placeholder="Select a crop" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="Cotton">Cotton</SelectItem>
-                                    <SelectItem value="Wheat">Wheat</SelectItem>
-                                    <SelectItem value="Rice">Rice</SelectItem>
-                                    <SelectItem value="Sugarcane">Sugarcane</SelectItem>
-                                    <SelectItem value="Maize">Maize</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="weather">Weather Conditions</Label>
-                            <Input id="weather" placeholder="e.g., High humidity, expected rain" value={weather} onChange={(e) => setWeather(e.target.value)} />
-                        </div>
-                    </div>
+                <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                        Click the button to get AI-powered recommendations based on today's weather forecast. (Forecast is currently simulated).
+                    </p>
                 </CardContent>
                 <CardFooter>
-                    <Button type="submit" disabled={loading} className="w-full md:w-auto">
+                    <Button type="submit" disabled={loading || !profile?.crops?.length} className="w-full md:w-auto">
                         {loading ? <LoadingSpinner message="Getting Recommendations..." /> : 'Get Recommendations'}
                     </Button>
                 </CardFooter>

@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -5,45 +6,51 @@ import { Badge } from "@/components/ui/badge";
 import Link from 'next/link';
 import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
-import { useAuthUser } from "@/hooks/use-auth";
-import { listRecentReports } from "@/lib/repositories";
-import type { DiagnosisReport } from "@/lib/models";
+import { useAuth } from "@/firebase";
+import { DiagnosisReport } from "@/lib/models";
 import Image from "next/image";
 import { ArrowLeft, Calendar, DollarSign, AlertTriangle, CheckCircle, Shield, ListChecks, FlaskConical, Clock, ShieldAlert } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { getDoc, doc } from "firebase/firestore";
+import { useFirebase } from "@/firebase";
+import LoadingSpinner from "@/components/agrisahayak/loading-spinner";
 
-export default function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { user } = useAuthUser();
+export default function ReportDetailPage({ params }: { params: { id: string } }) {
+    const { user } = useAuth();
+    const { db } = useFirebase();
     const [report, setReport] = useState<DiagnosisReport | null>(null);
     const [loading, setLoading] = useState(true);
-    const [reportId, setReportId] = useState<string>("");
+
+    const reportId = params.id;
 
     useEffect(() => {
-        (async () => {
-            const resolvedParams = await params;
-            setReportId(resolvedParams.id);
-        })();
-    }, [params]);
+        if (!user || !reportId || !db) return;
 
-    useEffect(() => {
         let cancel = false;
-        (async () => {
-            if (!user || !reportId) return;
+        const fetchReport = async () => {
             try {
-                const reports = await listRecentReports(user.uid, 50); // Get more to find the specific one
-                const foundReport = reports.find(r => r.id === reportId);
+                const reportRef = doc(db, 'users', user.uid, 'reports', reportId);
+                const reportSnap = await getDoc(reportRef);
+
                 if (!cancel) {
-                    setReport(foundReport || null);
+                    if (reportSnap.exists()) {
+                        setReport({ id: reportSnap.id, ...reportSnap.data() } as DiagnosisReport);
+                    } else {
+                        console.log("No such document!");
+                        setReport(null);
+                    }
                     setLoading(false);
                 }
             } catch (error) {
                 console.error('Error fetching report:', error);
                 if (!cancel) setLoading(false);
             }
-        })();
+        };
+
+        fetchReport();
         return () => { cancel = true; };
-    }, [user, reportId]);
+    }, [user, reportId, db]);
 
     if (loading) {
         return (
@@ -58,8 +65,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                     <h1 className="text-3xl font-bold font-headline">Loading Report...</h1>
                 </div>
                 <Card className="text-center p-12">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
-                    <p className="mt-4 text-muted-foreground">Loading report details...</p>
+                    <LoadingSpinner message="Loading report details..." />
                 </Card>
             </div>
         );
@@ -77,15 +83,15 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                     </Button>
                     <h1 className="text-3xl font-bold font-headline">Report Not Found</h1>
                 </div>
-            <Card>
-                <CardHeader>
-                    <CardTitle>Report Not Found</CardTitle>
-                </CardHeader>
-                <CardContent>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Report Not Found</CardTitle>
+                    </CardHeader>
+                    <CardContent>
                         <p>The report you are looking for does not exist or you don't have permission to view it.</p>
-                    <Button asChild className="mt-4"><Link href="/dashboard">Back to Dashboard</Link></Button>
-                </CardContent>
-            </Card>
+                        <Button asChild className="mt-4"><Link href="/dashboard">Back to Dashboard</Link></Button>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -123,11 +129,11 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                         <div>
                             <CardTitle className="text-2xl">{report.disease}</CardTitle>
                             <CardDescription>
-                                {report.crop} • {report.createdAt?.toDate?.()?.toLocaleDateString() || 'Unknown date'}
+                                {report.crop} • {report.createdAt?.toDate?.().toLocaleDateString() || 'Unknown date'}
                             </CardDescription>
                         </div>
                         <div className="flex gap-2">
-                            <Badge variant={getSeverityVariant(report.severity)}>{report.severity} Severity</Badge>
+                            {report.severity && <Badge variant={getSeverityVariant(report.severity)}>{report.severity} Severity</Badge>}
                             <Badge variant="outline">{report.status}</Badge>
                         </div>
                     </div>
@@ -177,7 +183,7 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground">Affected Parts</p>
-                                    <p className="font-medium">{report.affectedParts.join(', ')}</p>
+                                    <p className="font-medium">{report.affectedParts?.join(', ')}</p>
                                 </div>
                             </div>
                             <Separator />
@@ -315,14 +321,14 @@ export default function ReportDetailPage({ params }: { params: Promise<{ id: str
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Created</span>
-                                <span>{report.createdAt?.toDate?.()?.toLocaleString() || 'Unknown'}</span>
+                                <span>{report.createdAt?.toDate?.().toLocaleString() || 'Unknown'}</span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-muted-foreground">Last Updated</span>
-                                <span>{report.updatedAt?.toDate?.()?.toLocaleString() || 'Unknown'}</span>
-                </div>
+                                <span>{report.updatedAt?.toDate?.().toLocaleString() || 'Unknown'}</span>
+                            </div>
                         </CardContent>
-            </Card>
+                    </Card>
                 </div>
             </div>
         </div>

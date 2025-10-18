@@ -1,3 +1,4 @@
+
 // Firestore data models and converters
 
 export type UserProfile = {
@@ -23,7 +24,7 @@ export type TreatmentStep = {
 
 export type DiagnosisReport = {
   id: string;
-  uid: string;
+  uid:string;
   crop?: string;
   imageUrl?: string; // storage url or data url persisted elsewhere
   disease: string;
@@ -42,4 +43,24 @@ export type DiagnosisReport = {
   updatedAt: any;
 };
 
+export type AdminLog = {
+  id: string;
+  agentName: 'ingestAgent' | 'diagnosticAgent' | 'actionPlannerAgent' | 'marketplaceAgent' | 'coordinatorAgent';
+  action: string;
+  reportId?: string;
+  status: 'success' | 'error' | 'info';
+  duration?: number;
+  timestamp: any;
+  payload?: Record<string, any>;
+};
 
+export type Supplier = {
+  id: string;
+  name: string;
+  location: string;
+  distance: number;
+  products: string[];
+  rating: number;
+  phone: string;
+  whatsappLink: string;
+};

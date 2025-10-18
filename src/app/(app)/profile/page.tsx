@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,12 +11,14 @@ import { Camera, Save } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { useAuthUser } from "@/hooks/use-auth";
+import { useAuth } from "@/firebase";
 import { getProfile, upsertProfile } from "@/lib/repositories";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
     const presetCrops = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize"];
-    const { user } = useAuthUser();
+    const { user } = useAuth();
+    const { toast } = useToast();
     const [name, setName] = useState("");
     const [location, setLocation] = useState("");
     const [language, setLanguage] = useState<"english" | "urdu">("english");
@@ -24,17 +27,17 @@ export default function ProfilePage() {
 
     useEffect(() => {
         let cancel = false;
-        (async () => {
-            if (!user) return;
-            const p = await getProfile(user.uid);
-            if (cancel) return;
-            if (p) {
-                setName(p.name ?? "");
-                setLocation(p.location ?? "");
-                setLanguage((p.language as any) ?? "english");
-                setCrops(p.crops ?? []);
-            }
-        })();
+        if (user) {
+            getProfile(user.uid).then(p => {
+                if (cancel) return;
+                if (p) {
+                    setName(p.name ?? "");
+                    setLocation(p.location ?? "Faisalabad, Punjab");
+                    setLanguage((p.language as any) ?? "english");
+                    setCrops(p.crops ?? []);
+                }
+            });
+        }
         return () => { cancel = true; };
     }, [user]);
 
@@ -45,11 +48,13 @@ export default function ProfilePage() {
     const handleSaveProfile = async () => {
         if (!user) return;
         await upsertProfile({ uid: user.uid, phone: user.phoneNumber ?? "", name, location });
+        toast({ title: "Profile Saved", description: "Your personal information has been updated." });
     };
 
     const handleSavePreferences = async () => {
         if (!user) return;
         await upsertProfile({ uid: user.uid, phone: user.phoneNumber ?? "", language, crops });
+        toast({ title: "Preferences Saved", description: "Your preferences have been updated." });
     };
 
     return (
@@ -65,8 +70,8 @@ export default function ProfilePage() {
                      <div className="flex items-center gap-6">
                         <div className="relative">
                             <Avatar className="h-24 w-24">
-                                <AvatarImage src="https://picsum.photos/seed/user1/200/200" data-ai-hint="person" />
-                                <AvatarFallback>GR</AvatarFallback>
+                                <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid}/200/200`} data-ai-hint="person" />
+                                <AvatarFallback>{name?.charAt(0) || 'U'}</AvatarFallback>
                             </Avatar>
                             <Button size="icon" className="absolute bottom-0 right-0 rounded-full h-8 w-8">
                                 <Camera className="h-4 w-4" />
@@ -118,7 +123,6 @@ export default function ProfilePage() {
                             {presetCrops.map(crop => (
                                 <Button key={crop} variant={crops.includes(crop) ? "secondary" : "outline"} className="rounded-full" onClick={() => toggleCrop(crop)}>{crop}</Button>
                             ))}
-                            <Button variant="outline" className="rounded-full">+</Button>
                         </div>
                     </div>
 
