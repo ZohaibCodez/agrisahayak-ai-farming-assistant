@@ -15,14 +15,16 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { getDoc, doc } from "firebase/firestore";
 import { useFirebase } from "@/firebase";
 import LoadingSpinner from "@/components/agrisahayak/loading-spinner";
+import { useParams } from 'next/navigation';
 
-export default function ReportDetailPage({ params }: { params: { id: string } }) {
+export default function ReportDetailPage() {
     const { user } = useAuth();
     const { db } = useFirebase();
     const [report, setReport] = useState<DiagnosisReport | null>(null);
     const [loading, setLoading] = useState(true);
-
-    const reportId = params.id;
+    
+    const params = useParams();
+    const reportId = params.id as string;
 
     useEffect(() => {
         if (!user || !reportId || !db) return;
