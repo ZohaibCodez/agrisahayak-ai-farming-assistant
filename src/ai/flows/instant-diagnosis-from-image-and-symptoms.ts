@@ -24,6 +24,7 @@ export type InstantDiagnosisFromImageAndSymptomsInput = z.infer<
 >;
 
 const InstantDiagnosisFromImageAndSymptomsOutputSchema = z.object({
+  crop: z.string().describe('The type of crop identified in the image (e.g., Cotton, Wheat, Rice, Sugarcane, Maize, etc.).'),
   disease: z.string().describe('The name of the disease or pest affecting the crop.'),
   confidence: z.number().describe('The confidence score (0-100) of the diagnosis.'),
   affectedParts: z.string().array().describe('The parts of the crop affected by the disease or pest.'),
@@ -48,17 +49,20 @@ const prompt = ai.definePrompt({
   input: {schema: InstantDiagnosisFromImageAndSymptomsInputSchema},
   output: {schema: InstantDiagnosisFromImageAndSymptomsOutputSchema},
   prompt: `You are an expert plant pathologist specializing in Pakistani crops (cotton, wheat, rice, sugarcane, maize).
-Analyze the image and symptoms provided to diagnose the disease or pest affecting the crop.
+Analyze the image and symptoms provided to identify the crop type and diagnose any disease or pest affecting it.
 
 Image: {{media url=photoDataUri}}
 Symptoms: {{{symptoms}}}
 
 Identify:
-1. Disease/pest name
-2. Confidence score (0-100%)
-3. Affected parts
-4. Severity (Low/Medium/High)
-5. Description of the disease/pest and its symptoms
+1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops)
+2. Disease/pest name (if any)
+3. Confidence score (0-100%)
+4. Affected parts
+5. Severity (Low/Medium/High)
+6. Description of the disease/pest and its symptoms
+
+If no disease is visible, set disease to "Healthy" and confidence to 95+.
 
 Respond in JSON format.`, // prettier-ignore
 });

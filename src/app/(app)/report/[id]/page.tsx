@@ -86,6 +86,7 @@ export default function ReportDetailPage() {
             // Re-run diagnosis
             const diagnosis = await instantDiagnosisFromImageAndSymptoms({ photoDataUri, symptoms: report.symptoms || '' });
             await updateReport(user.uid, report.id, {
+                crop: diagnosis.crop, // Update crop with AI-detected crop
                 disease: diagnosis.disease,
                 confidence: diagnosis.confidence,
                 affectedParts: diagnosis.affectedParts,
@@ -97,7 +98,7 @@ export default function ReportDetailPage() {
             await createLog({ agentName: 'diagnosticAgent', action: 'retry_completed', reportId: report.id, status: 'success', payload: diagnosis });
 
             // Re-run planning
-            const plan = await generateLocalizedTreatmentPlan({ disease: diagnosis.disease, crop: report.crop || 'Unknown' });
+            const plan = await generateLocalizedTreatmentPlan({ disease: diagnosis.disease, crop: diagnosis.crop });
             await updateReport(user.uid, report.id, { plan: plan as any, status: 'Complete' } as any);
             await createLog({ agentName: 'actionPlannerAgent', action: 'retry_planning_completed', reportId: report.id, status: 'success', payload: plan });
 

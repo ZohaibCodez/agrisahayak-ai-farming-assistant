@@ -91,22 +91,24 @@ export async function uploadReportImage(uid: string, reportId: string, file: Fil
         console.log("Download URL obtained:", downloadURL);
         
         return downloadURL;
-    } catch (error: any) {
-        console.error("Upload error details:", {
-            message: error.message,
-            code: error.code,
-            stack: error.stack
-        });
+    } catch (error: unknown) {
+        // Normalize error to avoid accessing properties on non-object errors
+        const err = error as any;
+        const message = typeof err?.message === 'string' ? err.message : String(err ?? 'Unknown error');
+        const code = err?.code;
+        const stack = err?.stack;
+
+        console.error('Upload error details:', { message, code, stack, raw: err });
         
         // Provide more specific error messages
-        if (error.message.includes('timeout')) {
+        if (message.includes('timeout')) {
             throw new Error('Image upload timed out. Please check your internet connection and try again.');
-        } else if (error.code === 'storage/unauthorized') {
+        } else if (code === 'storage/unauthorized') {
             throw new Error('Upload failed: Unauthorized. Please check Firebase Storage rules.');
-        } else if (error.code === 'storage/object-not-found') {
+        } else if (code === 'storage/object-not-found') {
             throw new Error('Upload failed: Storage bucket not found. Please check Firebase configuration.');
         } else {
-            throw new Error(`Image upload failed: ${error.message}`);
+            throw new Error(`Image upload failed: ${message}`);
         }
     }
 }
