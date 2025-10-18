@@ -12,6 +12,9 @@ import { getProfile, listRecentReports } from "@/lib/repositories";
 import { useEffect, useState } from "react";
 import { UserProfile, DiagnosisReport } from "@/lib/models";
 import { SkeletonDashboard } from "@/components/ui/skeleton-enhanced";
+import { ScrollAnimation, InteractiveCard, TouchGesture } from "@/components/ui/interactive";
+import { AccessibleCard, AccessibleButton } from "@/components/ui/accessibility";
+import { useScrollAnimation } from "@/hooks/use-scroll-animation";
 
 export default function DashboardPage() {
     const { user } = useAuth();
@@ -40,7 +43,12 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="space-y-8 animate-in fade-in-50 duration-500">
+        <TouchGesture
+            onSwipeLeft={() => console.log('Swipe left')}
+            onSwipeRight={() => console.log('Swipe right')}
+            className="space-y-12"
+        >
+            <ScrollAnimation animation="fadeIn" delay={100}>
             {/* Enhanced Welcome Section */}
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl p-8 border border-green-100">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
@@ -76,7 +84,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 <StatCard
                     title="Total Reports"
                     value={totalReports.toString()}
@@ -168,7 +176,8 @@ export default function DashboardPage() {
                 </div>
                 <RecentReports />
             </div>
-        </div>
+            </ScrollAnimation>
+        </TouchGesture>
     );
 }
 
@@ -193,19 +202,28 @@ function StatCard({
     };
 
     return (
-        <Card className="hover:shadow-lg hover:scale-105 transition-all duration-300 group cursor-pointer">
-            <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                    <div>
+        <InteractiveCard 
+            hoverEffect={true}
+            clickable={true}
+            pressEffect={true}
+            className="group cursor-pointer"
+        >
+            <AccessibleCard
+                title={title}
+                ariaLabel={`${title}: ${value}`}
+                className="hover:shadow-xl hover:scale-105 transition-all duration-300 border-2 border-transparent hover:border-primary/20 hover:bg-gradient-to-br hover:from-white hover:to-primary/5"
+            >
+                <div className="flex items-center justify-between p-2">
+                    <div className="space-y-1">
                         <p className="text-sm font-medium text-gray-600 mb-1 group-hover:text-gray-800 transition-colors">{title}</p>
                         <p className="text-3xl font-bold text-gray-900 group-hover:text-primary transition-colors">{value}</p>
                         <p className="text-xs text-gray-500 mt-1 group-hover:text-gray-600 transition-colors">{trend}</p>
                     </div>
-                    <div className={`p-3 rounded-lg group-hover:scale-110 transition-transform duration-300 ${colorClasses[color as keyof typeof colorClasses]}`}>
+                    <div className={`p-4 rounded-xl group-hover:scale-110 group-hover:rotate-3 transition-all duration-300 shadow-sm group-hover:shadow-md ${colorClasses[color as keyof typeof colorClasses]}`}>
                         {icon}
                     </div>
                 </div>
-            </CardContent>
-        </Card>
+            </AccessibleCard>
+        </InteractiveCard>
     );
 }

@@ -9,6 +9,7 @@ import { proactiveWeatherAlertsWithRecommendations, WeatherAlertsOutput } from "
 import LoadingSpinner from "./loading-spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Lightbulb, Sun, CloudRain, Snowflake, AlertTriangle, Wind, Cloud, Thermometer, Droplets, Eye, RefreshCw } from "lucide-react";
+import { AccessibleButton } from "@/components/ui/accessibility";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/firebase";
 import { getProfile, upsertProfile } from "@/lib/repositories";
@@ -163,16 +164,34 @@ export default function WeatherAlertCard() {
                 </div>
             </CardHeader>
 
-            <CardContent className="space-y-6">
+            <CardContent className="space-y-8">
                 {!result ? (
-                    <div className="text-center py-8">
-                        <div className="p-4 bg-amber-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                            <Eye className="h-8 w-8 text-amber-600" />
+                    <div className="text-center py-12">
+                        <div className="p-6 bg-gradient-to-br from-amber-100 to-orange-100 rounded-full w-20 h-20 mx-auto mb-6 flex items-center justify-center shadow-lg">
+                            <Eye className="h-10 w-10 text-amber-600" />
                         </div>
-                        <p className="text-gray-600 text-lg mb-2">Get AI-powered weather recommendations</p>
-                        <p className="text-gray-500 text-sm">
+                        <h3 className="text-gray-800 text-xl font-semibold mb-3">Get AI-powered weather recommendations</h3>
+                        <p className="text-gray-600 text-base leading-relaxed max-w-md mx-auto mb-8">
                             Click the button below to analyze current weather conditions and get personalized farming advice.
                         </p>
+                        <AccessibleButton
+                            onClick={handleSubmit}
+                            disabled={loading}
+                            className="px-8 py-3 text-lg font-medium bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 active:scale-95"
+                            aria-label="Get weather recommendations"
+                        >
+                            {loading ? (
+                                <>
+                                    <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent mr-3" />
+                                    Analyzing weather...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw className="mr-3 h-5 w-5" />
+                                    Get Weather Analysis
+                                </>
+                            )}
+                        </AccessibleButton>
                     </div>
                 ) : (
                     <div className="space-y-6">
@@ -226,30 +245,21 @@ export default function WeatherAlertCard() {
                 )}
             </CardContent>
 
-            <CardFooter className="flex flex-col sm:flex-row gap-3 pt-6">
-                <Button 
-                    onClick={handleSubmit} 
-                    disabled={loading} 
-                    className="flex-1 sm:flex-none group"
-                >
-                    {loading ? (
-                        <LoadingSpinner message="Analyzing weather..." variant="pulse" size="sm" />
-                    ) : (
-                        <>
-                            <RefreshCw className="mr-2 h-4 w-4 group-hover:rotate-180 transition-transform duration-500" />
-                            {profile?.crops?.length ? 'Get New Recommendations' : 'Run Weather Analysis'}
-                        </>
-                    )}
-                </Button>
-                {!profile && (
-                    <Button asChild variant="outline" className="flex-1 sm:flex-none">
-                        <a href="/profile" className="flex items-center gap-2">
+            {!profile && (
+                <CardFooter className="pt-6">
+                    <AccessibleButton
+                        variant="secondary"
+                        className="w-full sm:w-auto hover:bg-primary/10 hover:border-primary transition-all duration-300"
+                        onClick={() => { window.location.href = '/profile'; }}
+                        aria-label="Set profile"
+                    >
+                        <div className="flex items-center justify-center gap-2">
                             <Eye className="h-4 w-4" />
-                            Set Profile
-                        </a>
-                    </Button>
-                )}
-            </CardFooter>
+                            Set Profile for Better Recommendations
+                        </div>
+                    </AccessibleButton>
+                </CardFooter>
+            )}
         </Card>
     );
 }

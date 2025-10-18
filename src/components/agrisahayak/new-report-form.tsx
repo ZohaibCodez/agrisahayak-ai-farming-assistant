@@ -14,6 +14,8 @@ import { generateLocalizedTreatmentPlan, LocalizedTreatmentPlanOutput } from '@/
 import LoadingSpinner from './loading-spinner';
 import { ProgressSteps } from "@/components/ui/progress-enhanced";
 import { SkeletonForm } from "@/components/ui/skeleton-enhanced";
+import { InteractiveButton, ScrollAnimation, TouchGesture } from "@/components/ui/interactive";
+import { AccessibleFormField, AccessibleButton, LiveRegion } from "@/components/ui/accessibility";
 import { useToast } from "@/hooks/use-toast";
 import DiagnosisCard from './diagnosis-card';
 import TreatmentPlanCard from './treatment-plan-card';
@@ -396,11 +398,17 @@ export default function NewReportForm() {
     }
 
     return (
-        <div className="max-w-4xl mx-auto">
-            <div className="mb-8">
-                <h1 className="text-4xl font-bold font-headline text-gray-900 mb-4">Create New Diagnosis Report</h1>
-                <p className="text-lg text-gray-600">Upload a photo of your crop and describe the symptoms to get an AI-powered diagnosis.</p>
-            </div>
+        <TouchGesture
+            onSwipeLeft={() => console.log('Swipe left')}
+            onSwipeRight={() => console.log('Swipe right')}
+            className="max-w-4xl mx-auto"
+        >
+            <ScrollAnimation animation="fadeIn" delay={100}>
+                <div className="mb-12">
+                    <h1 className="text-4xl font-bold font-headline text-gray-900 mb-6">Create New Diagnosis Report</h1>
+                    <p className="text-lg text-gray-600 leading-relaxed">Upload a photo of your crop and describe the symptoms to get an AI-powered diagnosis.</p>
+                </div>
+            </ScrollAnimation>
 
             <Card className="shadow-lg border-0 bg-white/80 backdrop-blur-sm">
                 <form onSubmit={handleSubmit}>
@@ -556,6 +564,6 @@ export default function NewReportForm() {
                     </CardContent>
                 </form>
             </Card>
-        </div>
+        </TouchGesture>
     );
 }
