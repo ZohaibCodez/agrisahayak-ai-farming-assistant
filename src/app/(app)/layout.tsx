@@ -5,10 +5,29 @@ import { Leaf, LayoutDashboard, PlusCircle, ShoppingCart, User, Shield, LogOut }
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/firebase";
+import { getProfile } from "@/lib/repositories";
+import { useEffect, useState } from "react";
+import { UserProfile } from "@/lib/models";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const router = useRouter();
+    const { user, auth } = useAuth();
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+
+    useEffect(() => {
+        if (user) {
+            getProfile(user.uid).then(setProfile);
+        } else {
+            setProfile(null);
+        }
+    }, [user]);
+
+    const handleLogout = async () => {
+        await auth.signOut();
+        router.push('/login');
+    };
 
     const menuItems = [
         { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -46,7 +65,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                  <SidebarHeader>
                     <SidebarMenu>
                          <SidebarMenuItem>
-                                <SidebarMenuButton onClick={() => router.push('/login')} tooltip="Logout">
+                                <SidebarMenuButton onClick={handleLogout} tooltip="Logout">
                                     <LogOut />
                                     <span>Logout</span>
                                 </SidebarMenuButton>
@@ -59,7 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <SidebarTrigger className="md:hidden" />
                     <Button variant="outline" onClick={() => router.push('/profile')}>
                         <User className="mr-2 h-4 w-4" />
-                        <span>Ghulam Rasool</span>
+                        <span>{profile?.name || user?.displayName || 'Farmer'}</span>
                     </Button>
                 </header>
                 <main className="flex-1 p-4 sm:p-6 lg:p-8 bg-white dark:bg-black/10">

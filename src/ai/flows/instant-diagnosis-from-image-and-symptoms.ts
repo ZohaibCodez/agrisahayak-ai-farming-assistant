@@ -70,7 +70,28 @@ const instantDiagnosisFromImageAndSymptomsFlow = ai.defineFlow(
     outputSchema: InstantDiagnosisFromImageAndSymptomsOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    // Retry/backoff helper for transient network errors
+    async function retry<T>(fn: () => Promise<T>, attempts = 3, delayMs = 1000): Promise<T> {
+      let lastErr: any;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          return await fn();
+        } catch (err: any) {
+          lastErr = err;
+          // For non-transient errors, rethrow immediately
+          const code = err?.code || '';
+          if (code && !['UND_ERR_CONNECT_TIMEOUT', 'ETIMEDOUT', 'ECONNRESET'].includes(code)) {
+            throw err;
+          }
+          // exponential backoff
+          const backoff = delayMs * Math.pow(2, i);
+          await new Promise(r => setTimeout(r, backoff));
+        }
+      }
+      throw lastErr;
+    }
+
+    const { output } = await retry(() => prompt(input), 3, 2000);
     return output!;
   }
 );

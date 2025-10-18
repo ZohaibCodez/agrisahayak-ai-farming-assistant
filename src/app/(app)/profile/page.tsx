@@ -1,3 +1,7 @@
+
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,9 +11,51 @@ import { Camera, Save } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { useAuth } from "@/firebase";
+import { getProfile, upsertProfile } from "@/lib/repositories";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
-    const crops = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize"];
+    const presetCrops = ["Cotton", "Wheat", "Rice", "Sugarcane", "Maize"];
+    const { user } = useAuth();
+    const { toast } = useToast();
+    const [name, setName] = useState("");
+    const [location, setLocation] = useState("");
+    const [language, setLanguage] = useState<"english" | "urdu">("english");
+    const [crops, setCrops] = useState<string[]>([]);
+    const phoneDisplay = useMemo(() => user?.phoneNumber ?? "+92 —", [user]);
+
+    useEffect(() => {
+        let cancel = false;
+        if (user) {
+            getProfile(user.uid).then(p => {
+                if (cancel) return;
+                if (p) {
+                    setName(p.name ?? "");
+                    setLocation(p.location ?? "Faisalabad, Punjab");
+                    setLanguage((p.language as any) ?? "english");
+                    setCrops(p.crops ?? []);
+                }
+            });
+        }
+        return () => { cancel = true; };
+    }, [user]);
+
+    const toggleCrop = (crop: string) => {
+        setCrops(prev => prev.includes(crop) ? prev.filter(c => c !== crop) : [...prev, crop]);
+    };
+
+    const handleSaveProfile = async () => {
+        if (!user) return;
+        await upsertProfile({ uid: user.uid, phone: user.phoneNumber ?? "", name, location });
+        toast({ title: "Profile Saved", description: "Your personal information has been updated." });
+    };
+
+    const handleSavePreferences = async () => {
+        if (!user) return;
+        await upsertProfile({ uid: user.uid, phone: user.phoneNumber ?? "", language, crops });
+        toast({ title: "Preferences Saved", description: "Your preferences have been updated." });
+    };
 
     return (
         <div className="space-y-8 max-w-4xl mx-auto">
@@ -24,8 +70,8 @@ export default function ProfilePage() {
                      <div className="flex items-center gap-6">
                         <div className="relative">
                             <Avatar className="h-24 w-24">
-                                <AvatarImage src="https://picsum.photos/seed/user1/200/200" data-ai-hint="person" />
-                                <AvatarFallback>GR</AvatarFallback>
+                                <AvatarImage src={user?.photoURL || `https://picsum.photos/seed/${user?.uid}/200/200`} data-ai-hint="person" />
+                                <AvatarFallback>{name?.charAt(0) || 'U'}</AvatarFallback>
                             </Avatar>
                             <Button size="icon" className="absolute bottom-0 right-0 rounded-full h-8 w-8">
                                 <Camera className="h-4 w-4" />
@@ -34,19 +80,19 @@ export default function ProfilePage() {
                         <div className="grid gap-2 flex-grow">
                            <div className="grid w-full max-w-sm items-center gap-1.5">
                               <Label htmlFor="name">Full Name</Label>
-                              <Input type="text" id="name" defaultValue="Ghulam Rasool" />
+                              <Input type="text" id="name" value={name} onChange={(e) => setName(e.target.value)} />
                            </div>
                            <div className="grid w-full max-w-sm items-center gap-1.5">
                               <Label htmlFor="location">Location</Label>
-                              <Input type="text" id="location" defaultValue="Faisalabad, Punjab" />
+                              <Input type="text" id="location" value={location} onChange={(e) => setLocation(e.target.value)} />
                            </div>
                         </div>
                      </div>
                      <div className="grid w-full max-w-sm items-center gap-1.5">
                         <Label htmlFor="phone">Phone Number (Verified)</Label>
-                        <Input type="tel" id="phone" defaultValue="+92 300 1234567" readOnly disabled />
+                        <Input type="tel" id="phone" value={phoneDisplay} readOnly disabled />
                      </div>
-                     <Button>
+                     <Button onClick={handleSaveProfile}>
                         <Save className="mr-2 h-4 w-4" /> Save Changes
                      </Button>
                 </CardContent>
@@ -60,7 +106,7 @@ export default function ProfilePage() {
                 <CardContent className="space-y-6">
                     <div className="grid w-full max-w-sm items-center gap-1.5">
                         <Label htmlFor="language">Preferred Language</Label>
-                         <Select defaultValue="english">
+                        <Select value={language} onValueChange={(v) => setLanguage(v as any)}>
                             <SelectTrigger id="language">
                                 <SelectValue placeholder="Select language" />
                             </SelectTrigger>
@@ -74,10 +120,9 @@ export default function ProfilePage() {
                     <div className="space-y-2">
                         <Label>Crops Grown</Label>
                         <div className="flex flex-wrap gap-2">
-                            {crops.map(crop => (
-                                <Button key={crop} variant="secondary" className="rounded-full">{crop}</Button>
+                            {presetCrops.map(crop => (
+                                <Button key={crop} variant={crops.includes(crop) ? "secondary" : "outline"} className="rounded-full" onClick={() => toggleCrop(crop)}>{crop}</Button>
                             ))}
-                            <Button variant="outline" className="rounded-full">+</Button>
                         </div>
                     </div>
 
@@ -107,7 +152,7 @@ export default function ProfilePage() {
                             <Switch id="reminders" defaultChecked/>
                         </div>
                     </div>
-                     <Button>
+                    <Button onClick={handleSavePreferences}>
                         <Save className="mr-2 h-4 w-4" /> Save Preferences
                      </Button>
                 </CardContent>
