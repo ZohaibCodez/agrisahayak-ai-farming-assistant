@@ -45,20 +45,26 @@ export default function LoginPage() {
     }
   }, [user, router]);
   
+
   const setupRecaptcha = useCallback(() => {
     if (!auth || !recaptchaContainerRef.current) return;
     if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
 
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
-      size: 'invisible',
-      'callback': () => {
-        // reCAPTCHA solved, allow signInWithPhoneNumber.
-        console.log("reCAPTCHA solved");
-      },
-      'expired-callback': () => {
-        // Response expired. Ask user to solve reCAPTCHA again.
-        setError("reCAPTCHA response expired. Please try again.");
+    window.recaptchaVerifier = new RecaptchaVerifier(
+      auth,
+      'recaptcha-container',
+      {
+        size: 'normal',
+        callback: () => {
+          console.log('reCAPTCHA solved');
+        },
+        'expired-callback': () => {
+          setError('reCAPTCHA response expired. Please try again.');
+        },
       }
+    );
+    window.recaptchaVerifier.render().catch(() => {
+      setError('Failed to render reCAPTCHA.');
     });
   }, [auth]);
 
@@ -162,7 +168,7 @@ export default function LoginPage() {
               </div>
               
               {error && (<p className="text-sm text-destructive">{error}</p>)}
-              <div ref={recaptchaContainerRef} id="recaptcha-container" />
+              <div className="my-2" ref={recaptchaContainerRef} id="recaptcha-container" />
               <Button type="submit" className="w-full" disabled={isSending || phone.length < 10}>
                 {isSending ? <LoadingSpinner message="Sending OTP..." /> : 'Send OTP'}
               </Button>
