@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeApp as initializeAdminApp, getApps } from 'firebase-admin/app';
+import { coordinator, AgentType, TaskPriority } from '@/lib/coordinator-agent';
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -49,6 +50,21 @@ export async function POST(request: NextRequest) {
 
     const reportId = reportDocRef.id;
 
+    // Create diagnostic task via coordinator for better orchestration
+    const taskId = await coordinator.createTask({
+      agentType: AgentType.DIAGNOSTIC,
+      priority: TaskPriority.HIGH,
+      status: 'pending' as any,
+      userId,
+      reportId,
+      payload: {
+        photoDataUri,
+        symptoms: symptoms ?? ''
+      },
+      retryCount: 0,
+      maxRetries: 3
+    });
+
     // Call the diagnostic flow (server-side GenKit flow)
     let diagnosisResult: any = null;
     try {
@@ -67,31 +83,46 @@ export async function POST(request: NextRequest) {
       } as any);
 
       // Log agent decision for auditability
-      await db.collection('agent_decisions').add({
+      await coordinator.logAgentDecision({
         agentName: 'diagnosticAgent',
         action: 'diagnosis_completed',
         reportId,
+        taskId,
         status: 'success',
-        payload: diagnosisResult,
-        duration: null,
-        timestamp: new Date(),
+        payload: diagnosisResult
       });
 
-      return NextResponse.json({ success: true, reportId, diagnosis: diagnosisResult });
+      // Automatically create treatment plan task
+      await coordinator.createTask({
+        agentType: AgentType.TREATMENT_PLAN,
+        priority: TaskPriority.HIGH,
+        status: 'pending' as any,
+        userId,
+        reportId,
+        payload: {
+          disease: diagnosisResult.disease,
+          crop: diagnosisResult.crop || 'Unknown',
+          severity: diagnosisResult.severity,
+          location: lat && lon ? { lat, lon } : null
+        },
+        retryCount: 0,
+        maxRetries: 3
+      });
+
+      return NextResponse.json({ success: true, reportId, diagnosis: diagnosisResult, taskId });
     } catch (err) {
       console.error('Diagnosis flow error:', err);
       await reportDocRef.update({ status: 'Error', updatedAt: new Date(), description: `Diagnosis failed: ${err instanceof Error ? err.message : String(err)}` } as any);
-      await db.collection('agent_decisions').add({
+      await coordinator.logAgentDecision({
         agentName: 'diagnosticAgent',
         action: 'diagnosis_failed',
         reportId,
+        taskId,
         status: 'error',
-        payload: { error: err instanceof Error ? err.message : String(err) },
-        duration: null,
-        timestamp: new Date(),
+        payload: { error: err instanceof Error ? err.message : String(err) }
       });
 
-      return NextResponse.json({ error: 'Diagnosis failed' }, { status: 500 });
+      return NextResponse.json({ error: 'Diagnosis failed', taskId }, { status: 500 });
     }
 
   } catch (error) {
