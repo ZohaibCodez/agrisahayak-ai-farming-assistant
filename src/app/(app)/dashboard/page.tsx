@@ -7,6 +7,7 @@ import { PlusCircle, TrendingUp, Shield, Clock, MapPin, Calendar, Activity, Aler
 import Link from "next/link";
 import RecentReports from "@/components/agrisahayak/recent-reports";
 import WeatherAlertCard from "@/components/agrisahayak/weather-alert-card";
+import NotificationsPanel from "@/components/agrisahayak/notifications-panel";
 import { useAuth } from "@/firebase";
 import { getProfile, listRecentReports } from "@/lib/repositories";
 import { useEffect, useState } from "react";
@@ -122,9 +123,10 @@ export default function DashboardPage() {
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Weather Alerts - Takes 2 columns on large screens */}
-                <div className="lg:col-span-2">
+                {/* Weather Alerts and Notifications - Takes 2 columns on large screens */}
+                <div className="lg:col-span-2 space-y-8">
                     <WeatherAlertCard />
+                    <NotificationsPanel />
                 </div>
 
                 {/* Quick Actions */}
