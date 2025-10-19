@@ -10,6 +10,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { knowledgeBase } from "@/lib/knowledge-base";
+import { vectorSearch } from "@/lib/vector-search";
 
 const InstantDiagnosisFromImageAndSymptomsInputSchema = z.object({
   photoDataUri: z
@@ -54,15 +56,18 @@ Analyze the image and symptoms provided to identify the crop type and diagnose a
 Image: {{media url=photoDataUri}}
 Symptoms: {{{symptoms}}}
 
-Identify:
-1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops)
-2. Disease/pest name (if any)
-3. Confidence score (0-100%)
-4. Affected parts
-5. Severity (Low/Medium/High)
-6. Description of the disease/pest and its symptoms
+Knowledge Base Context:
+{{knowledgeContext}}
 
-If no disease is visible, set disease to "Healthy" and confidence to 95+.
+Based on the image analysis and the knowledge base context above, identify:
+1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops)
+2. Disease/pest name (if any) - use the knowledge base to match symptoms
+3. Confidence score (0-100%) - consider both image analysis and symptom matching
+4. Affected parts - from the knowledge base context
+5. Severity (Low/Medium/High) - based on knowledge base severity
+6. Description of the disease/pest and its symptoms - use knowledge base information
+
+If no disease is visible or symptoms don't match known diseases, set disease to "Healthy" and confidence to 95+.
 
 Respond in JSON format.`, // prettier-ignore
 });
@@ -95,7 +100,55 @@ const instantDiagnosisFromImageAndSymptomsFlow = ai.defineFlow(
       throw lastErr;
     }
 
-    const { output } = await retry(() => prompt(input), 3, 2000);
-    return output!;
+    try {
+      // Step 1: Use RAG to find similar diseases based on symptoms
+      const similarDiseases = await vectorSearch.searchSimilarDiseases(
+        input.symptoms,
+        undefined, // crop will be detected by AI
+        5, // top 5 similar diseases
+        0.3 // similarity threshold
+      );
+
+      // Step 2: Prepare context from knowledge base
+      const knowledgeContext = similarDiseases.map(disease => 
+        `Disease: ${disease.disease}\nCrop: ${disease.crop}\nSymptoms: ${disease.symptoms.join(', ')}\nSeverity: ${disease.severity}\nConfidence: ${disease.confidence}`
+      ).join('\n\n');
+
+      // Step 3: Create enhanced prompt with knowledge context
+      const enhancedPrompt = ai.definePrompt({
+        name: 'ragEnhancedDiagnosisPrompt',
+        input: {schema: InstantDiagnosisFromImageAndSymptomsInputSchema},
+        output: {schema: InstantDiagnosisFromImageAndSymptomsOutputSchema},
+        prompt: `You are an expert plant pathologist specializing in Pakistani crops (cotton, wheat, rice, sugarcane, maize).
+Analyze the image and symptoms provided to identify the crop type and diagnose any disease or pest affecting it.
+
+Image: {{media url=photoDataUri}}
+Symptoms: {{{symptoms}}}
+
+Knowledge Base Context:
+${knowledgeContext}
+
+Based on the image analysis and the knowledge base context above, identify:
+1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops)
+2. Disease/pest name (if any) - use the knowledge base to match symptoms
+3. Confidence score (0-100%) - consider both image analysis and symptom matching
+4. Affected parts - from the knowledge base context
+5. Severity (Low/Medium/High) - based on knowledge base severity
+6. Description of the disease/pest and its symptoms - use knowledge base information
+
+If no disease is visible or symptoms don't match known diseases, set disease to "Healthy" and confidence to 95+.
+
+Respond in JSON format.`,
+      });
+
+      const { output } = await retry(() => enhancedPrompt(input), 3, 2000);
+      return output!;
+    } catch (error) {
+      console.error('RAG-enhanced diagnosis error:', error);
+      
+      // Fallback to basic AI diagnosis if RAG fails
+      const { output } = await retry(() => prompt(input), 3, 2000);
+      return output!;
+    }
   }
 );
