@@ -4,39 +4,143 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { listSuppliers, seedSuppliers } from "@/lib/repositories";
-import { Supplier } from "@/lib/models";
-import { mockSuppliers } from "@/lib/data";
-import { MapPin, Star, Phone, MessageCircle, Clock, Truck, Award, Users } from "lucide-react";
+import { MapPin, Star, Phone, MessageCircle, Clock, Truck, Award, Users, Search, Filter } from "lucide-react";
 import { useEffect, useState } from "react";
 import LoadingSpinner from "./loading-spinner";
+import { searchSuppliers } from "@/lib/actions/marketplace-actions";
+
+// Define Supplier type locally to avoid server-side imports
+export interface Supplier {
+  id: string;
+  name: string;
+  type: 'supplier' | 'buyer' | 'logistics';
+  location: {
+    address: string;
+    coordinates: {
+      lat: number;
+      lng: number;
+    };
+    city: string;
+    province: string;
+  };
+  products?: string[];
+  services?: string[];
+  contact: {
+    phone: string;
+    email?: string;
+    whatsapp?: string;
+  };
+  rating?: number;
+  distance?: number;
+  availability?: 'available' | 'unavailable' | 'limited' | 'busy';
+  pricing?: {
+    competitive: boolean;
+    notes?: string;
+  };
+  verification: {
+    verified: boolean;
+    documents?: string[];
+  };
+}
+import { useAuth } from "@/firebase";
+import { getProfile } from "@/lib/repositories";
+import { UserProfile } from "@/lib/models";
+import { marketplaceAgent } from "@/ai/flows/marketplace-agent";
 
 export default function SuppliersCard() {
+    const { user } = useAuth();
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [loading, setLoading] = useState(true);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [filterType, setFilterType] = useState<string>('all');
+
+    useEffect(() => {
+        if (user && !profile) {
+            getProfile(user.uid).then(setProfile);
+        }
+    }, [user, profile]);
 
     useEffect(() => {
         let cancel = false;
         const fetchSuppliers = async () => {
             try {
-                // Seed the database with mock data if it's empty
-                await seedSuppliers(mockSuppliers);
-
-                const fetchedSuppliers = await listSuppliers();
-                if (!cancel) {
-                    setSuppliers(fetchedSuppliers);
+                setLoading(true);
+                
+                // Use server action for geolocation-based search
+                if (profile?.lat && profile?.lon) {
+                    const result = await searchSuppliers(
+                        searchQuery || 'agricultural supplies',
+                        {
+                            lat: profile.lat,
+                            lng: profile.lon,
+                            radius: 50 // 50km radius
+                        },
+                        {
+                            type: filterType === 'all' ? undefined : [filterType as 'supplier' | 'buyer' | 'logistics'],
+                            minRating: 3.0
+                        }
+                    );
+                    
+                    if (!cancel) {
+                        setSuppliers(result.suppliers);
+                    }
+                } else {
+                    // Fallback to mock data if no location
+                    const mockSuppliers = [
+                        {
+                            id: "supplier-1",
+                            name: "Green Valley Seeds & Fertilizers",
+                            type: "supplier" as const,
+                            location: {
+                                address: "123 Agriculture Road, Model Town",
+                                coordinates: { lat: 31.5204, lng: 74.3587 },
+                                city: "Lahore",
+                                province: "Punjab"
+                            },
+                            products: ["Seeds", "Fertilizers", "Pesticides", "Farming Tools"],
+                            services: ["Delivery", "Consultation", "Bulk Orders"],
+                            contact: {
+                                phone: "+92-300-1234567",
+                                email: "info@greenvalley.com",
+                                whatsapp: "+92-300-1234567"
+                            },
+                            rating: 4.5,
+                            distance: 5.2,
+                            availability: "available" as const,
+                            pricing: {
+                                competitive: true,
+                                notes: "Best prices in the area"
+                            },
+                            verification: {
+                                verified: true,
+                                documents: ["Business License", "Tax Certificate"]
+                            }
+                        }
+                    ];
+                    
+                    if (!cancel) {
+                        setSuppliers(mockSuppliers);
+                    }
                 }
             } catch (error) {
-                console.error("Failed to fetch suppliers:", error);
+                console.error('Error fetching suppliers:', error);
+                if (!cancel) {
+                    setSuppliers([]);
+                }
             } finally {
                 if (!cancel) {
                     setLoading(false);
                 }
             }
         };
+
         fetchSuppliers();
-        return () => { cancel = true; };
-    }, []);
+
+        return () => {
+            cancel = true;
+        };
+    }, [profile, searchQuery, filterType]);
 
     return (
         <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-blue-50/30">
@@ -93,11 +197,12 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
         return "text-gray-600 bg-gray-100";
     };
 
-    const getDistanceColor = (distance: number) => {
-        if (distance <= 5) return "text-green-600 bg-green-100";
-        if (distance <= 15) return "text-blue-600 bg-blue-100";
-        return "text-orange-600 bg-orange-100";
-    };
+        const getDistanceColor = (distance: number | undefined) => {
+            if (!distance) return "text-gray-600 bg-gray-100";
+            if (distance <= 5) return "text-green-600 bg-green-100";
+            if (distance <= 15) return "text-blue-600 bg-blue-100";
+            return "text-orange-600 bg-orange-100";
+        };
 
     return (
         <div className="group border rounded-xl p-6 bg-white/80 backdrop-blur-sm hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-gray-200">
@@ -112,22 +217,22 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
                             <div className="flex items-center gap-4 mt-2">
                                 <div className="flex items-center gap-1">
                                     <MapPin className="h-4 w-4 text-gray-500" />
-                                    <span className="text-sm text-gray-600">{supplier.distance} km away</span>
+                                    <span className="text-sm text-gray-600">{supplier.distance ? supplier.distance.toFixed(1) : 'Unknown'} km away</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                     <Star className="h-4 w-4 text-amber-500" />
-                                    <span className="text-sm font-medium">{supplier.rating}</span>
+                                    <span className="text-sm font-medium">{supplier.rating || 'N/A'}</span>
                                 </div>
                             </div>
                         </div>
                         <div className="flex gap-2">
-                            <Badge className={`px-2 py-1 text-xs ${getRatingColor(supplier.rating)}`}>
+                            <Badge className={`px-2 py-1 text-xs ${getRatingColor(supplier.rating || 0)}`}>
                                 <Award className="h-3 w-3 mr-1" />
-                                {supplier.rating >= 4.5 ? 'Excellent' : supplier.rating >= 4.0 ? 'Good' : 'Fair'}
+                                {(supplier.rating || 0) >= 4.5 ? 'Excellent' : (supplier.rating || 0) >= 4.0 ? 'Good' : 'Fair'}
                             </Badge>
-                            <Badge className={`px-2 py-1 text-xs ${getDistanceColor(supplier.distance)}`}>
-                                {supplier.distance <= 5 ? 'Nearby' : supplier.distance <= 15 ? 'Close' : 'Far'}
-                            </Badge>
+                                <Badge className={`px-2 py-1 text-xs ${getDistanceColor(supplier.distance)}`}>
+                                    {!supplier.distance ? 'Unknown' : supplier.distance <= 5 ? 'Nearby' : supplier.distance <= 15 ? 'Close' : 'Far'}
+                                </Badge>
                         </div>
                     </div>
 
@@ -137,40 +242,40 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
                             <Clock className="h-4 w-4" />
                             Available Products
                         </h4>
-                        <div className="flex flex-wrap gap-2">
-                            {supplier.products.map((product, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                    {product}
-                                </Badge>
-                            ))}
-                        </div>
+                            <div className="flex flex-wrap gap-2">
+                                {(supplier.products || []).map((product, idx) => (
+                                    <Badge key={idx} variant="outline" className="text-xs">
+                                        {product}
+                                    </Badge>
+                                ))}
+                            </div>
                     </div>
                 </div>
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row lg:flex-col gap-3 lg:w-48">
-                    <Button 
-                        variant="default" 
-                        size="sm" 
-                        asChild 
-                        className="flex-1 group-hover:bg-green-600 transition-colors"
-                    >
-                        <a href={`tel:${supplier.phone}`}>
-                            <Phone className="mr-2 h-4 w-4" /> 
-                            Call Now
-                        </a>
-                    </Button>
-                    <Button 
-                        variant="outline" 
-                        size="sm" 
-                        asChild 
-                        className="flex-1 group-hover:border-green-500 group-hover:text-green-600 transition-colors"
-                    >
-                        <a href={supplier.whatsappLink} target="_blank" rel="noopener noreferrer">
-                            <MessageCircle className="mr-2 h-4 w-4" /> 
-                            WhatsApp
-                        </a>
-                    </Button>
+                        <Button 
+                            variant="default" 
+                            size="sm" 
+                            asChild 
+                            className="flex-1 group-hover:bg-green-600 transition-colors"
+                        >
+                            <a href={`tel:${supplier.contact.phone}`}>
+                                <Phone className="mr-2 h-4 w-4" /> 
+                                Call Now
+                            </a>
+                        </Button>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            asChild 
+                            className="flex-1 group-hover:border-green-500 group-hover:text-green-600 transition-colors"
+                        >
+                            <a href={`https://wa.me/${supplier.contact.whatsapp || supplier.contact.phone}`} target="_blank" rel="noopener noreferrer">
+                                <MessageCircle className="mr-2 h-4 w-4" /> 
+                                WhatsApp
+                            </a>
+                        </Button>
                 </div>
             </div>
         </div>

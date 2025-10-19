@@ -152,3 +152,53 @@ export async function listSuppliers(): Promise<Supplier[]> {
     return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Supplier));
 }
 
+// Marketplace helpers
+// NOTE: This is a simple geo-distance filter using stored lat/lon on suppliers.
+// For production, consider integrating with a geospatial index (e.g., Firestore GeoPoint + geohash library or Cloud Firestore's built-in support).
+export async function findSuppliersNearby(lat: number, lon: number, radiusKm: number = 50, maxResults: number = 20): Promise<Supplier[]> {
+    const db = getDb();
+    const ref = collection(db, 'suppliers');
+    const snap = await getDocs(ref);
+    const suppliers = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Supplier & { lat?: number; lon?: number }));
+
+    function haversine(aLat: number, aLon: number, bLat: number, bLon: number) {
+        const toRad = (v: number) => (v * Math.PI) / 180;
+        const R = 6371; // km
+        const dLat = toRad(bLat - aLat);
+        const dLon = toRad(bLon - aLon);
+        const lat1 = toRad(aLat);
+        const lat2 = toRad(bLat);
+        const sinDLat = Math.sin(dLat / 2) * Math.sin(dLat / 2);
+        const sinDLon = Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        const a = sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon;
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+    }
+
+    const results = suppliers
+        .map(s => ({ ...s, distance: typeof s.lat === 'number' && typeof s.lon === 'number' ? haversine(lat, lon, s.lat, s.lon) : Infinity }))
+        .filter(s => s.distance !== Infinity && s.distance <= radiusKm)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, maxResults)
+        .map(s => ({ id: s.id, name: s.name, location: s.location, distance: Math.round((s.distance ?? 0) * 10) / 10, products: s.products, rating: s.rating, phone: s.phone, whatsappLink: s.whatsappLink } as Supplier));
+
+    return results;
+}
+
+export async function createMarketplaceListing(listing: { sellerId: string; title: string; description?: string; price: number; location?: string; contact?: string; tags?: string[]; createdAt?: any }): Promise<string> {
+    const db = getDb();
+    const ref = collection(db, 'marketplace');
+    const now = serverTimestamp();
+    const docRef = await addDoc(ref, { ...listing, createdAt: listing.createdAt ?? now, status: 'active' } as any);
+    return docRef.id;
+}
+
+// Coordinator / Agent decision logging helper
+export async function createAgentDecisionLog(agentName: AdminLog['agentName'], action: string, reportId?: string, payload?: Record<string, any>, status: AdminLog['status'] = 'info', duration?: number): Promise<string> {
+    const db = getDb();
+    const ref = collection(db, 'agent_decisions');
+    const now = serverTimestamp();
+    const docRef = await addDoc(ref, { agentName, action, reportId: reportId ?? null, payload: payload ?? {}, status, duration: duration ?? null, timestamp: now } as any);
+    return docRef.id;
+}
+
