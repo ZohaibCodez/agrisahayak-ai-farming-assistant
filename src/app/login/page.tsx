@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +14,7 @@ import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } fro
 import { useToast } from '@/hooks/use-toast';
 import { upsertProfile } from '@/lib/repositories';
 
-// Extend window for storing the recaptcha verifier instance
+// Extend window to safely store Firebase instances
 declare global {
   interface Window {
     recaptchaVerifier?: RecaptchaVerifier;
@@ -30,76 +30,109 @@ export default function LoginPage() {
   const [code, setCode] = useState('');
   const [showOtpForm, setShowOtpForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isCaptchaVerified, setIsCaptchaVerified] = useState(false);
 
   const router = useRouter();
   const { auth } = useFirebase();
   const { user, isUserLoading } = useAuth();
   const { toast } = useToast();
+  
+  // Ref for the reCAPTCHA container
   const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Redirect if user is already logged in
   useEffect(() => {
     setIsClient(true);
-    // If user is already logged in, redirect to dashboard
     if (user) {
       router.push('/dashboard');
     }
   }, [user, router]);
-  
 
+  // Set up the visible reCAPTCHA
   const setupRecaptcha = useCallback(() => {
     if (!auth || !recaptchaContainerRef.current) return;
-    if (window.recaptchaVerifier) window.recaptchaVerifier.clear();
 
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      auth,
-      'recaptcha-container',
-      {
-        size: 'normal',
-        callback: () => {
-          console.log('reCAPTCHA solved');
-        },
-        'expired-callback': () => {
-          setError('reCAPTCHA response expired. Please try again.');
-        },
+    // Clean up previous instance if it exists
+    if (window.recaptchaVerifier) {
+      try {
+        window.recaptchaVerifier.clear();
+      } catch (e) {
+        console.warn("reCAPTCHA clear failed, this can happen on fast re-renders", e);
       }
-    );
-    window.recaptchaVerifier.render().catch(() => {
-      setError('Failed to render reCAPTCHA.');
-    });
+    }
+    
+    // Create a new visible reCAPTCHA verifier
+    try {
+        window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
+            'size': 'normal', // Use a visible reCAPTCHA
+            'callback': (response: any) => {
+              // This callback is executed when the user successfully completes the reCAPTCHA
+              setIsCaptchaVerified(true);
+              setError(null);
+            },
+            'expired-callback': () => {
+              // Response expired. Ask user to solve reCAPTCHA again.
+              setIsCaptchaVerified(false);
+              setError("reCAPTCHA response expired. Please verify again.");
+            }
+        });
+        window.recaptchaVerifier.render(); // Explicitly render the widget
+    } catch (e) {
+        console.error("RecaptchaVerifier error", e);
+        setError("Failed to render reCAPTCHA. Please refresh the page and check your connection.");
+    }
   }, [auth]);
 
+  // Effect to initialize reCAPTCHA when the phone form is shown
   useEffect(() => {
-    if (isClient) {
+    if (isClient && !showOtpForm) {
       setupRecaptcha();
     }
-  }, [isClient, setupRecaptcha]);
+    
+    // Cleanup on component unmount
+    return () => {
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {
+            console.warn("reCAPTCHA cleanup failed on unmount.", e);
+        }
+      }
+    };
+  }, [isClient, showOtpForm, setupRecaptcha]);
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.replace(/\D/g, '').slice(0, 10);
     setPhone(value);
   };
-
+  
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setIsSending(true);
-    if (!window.recaptchaVerifier) {
-      setError("reCAPTCHA not initialized. Please refresh the page.");
+
+    if (!auth || !window.recaptchaVerifier) {
+      setError("Authentication service or reCAPTCHA is not ready.");
       setIsSending(false);
       return;
     }
-
+    
     try {
       const fullPhone = `+92${phone.replace(/^0/, '')}`;
       const confirmationResult = await signInWithPhoneNumber(auth, fullPhone, window.recaptchaVerifier);
+      
       window.confirmationResult = confirmationResult;
       setShowOtpForm(true);
       toast({ title: "OTP Sent", description: `An OTP has been sent to ${fullPhone}` });
+
     } catch (err: any) {
       console.error("OTP Send Error:", err);
-      setError(err?.message ?? 'Failed to send OTP. Please check the phone number and try again.');
-      // Reset reCAPTCHA
-      setupRecaptcha();
+      setError(err.message || 'Failed to send OTP. Please check the phone number and try again.');
+      // Reset reCAPTCHA on failure
+      if (window.recaptchaVerifier) {
+        try { window.recaptchaVerifier.clear(); setupRecaptcha(); } catch (e) {}
+      }
+      setIsCaptchaVerified(false);
     } finally {
       setIsSending(false);
     }
@@ -110,28 +143,32 @@ export default function LoginPage() {
     if (!window.confirmationResult) {
       setError("Verification session expired. Please request a new OTP.");
       return;
-    };
+    }
     setError(null);
     setIsVerifying(true);
+
     try {
       const cred = await window.confirmationResult.confirm(code);
       const loggedInUser = cred.user;
       
-      // Create or update user profile
       await upsertProfile({ uid: loggedInUser.uid, phone: loggedInUser.phoneNumber! });
 
       toast({ title: "Login Successful!", description: "Welcome to AgriSahayak.", className: "bg-green-100 text-green-800" });
       router.push('/dashboard');
     } catch (err: any) {
       console.error("OTP Verify Error:", err);
-      setError(err?.message ?? 'Invalid code. Please try again.');
+      setError(err.message || 'Invalid code. Please try again.');
     } finally {
       setIsVerifying(false);
     }
   };
 
   if (!isClient || isUserLoading) {
-    return <div className="flex h-screen w-screen items-center justify-center"><LoadingSpinner message="Loading..." /></div>;
+    return (
+      <div className="flex h-screen w-screen items-center justify-center">
+        <LoadingSpinner message="Loading..." />
+      </div>
+    );
   }
 
   return (
@@ -167,9 +204,12 @@ export default function LoginPage() {
                 </div>
               </div>
               
-              {error && (<p className="text-sm text-destructive">{error}</p>)}
-              <div className="my-2" ref={recaptchaContainerRef} id="recaptcha-container" />
-              <Button type="submit" className="w-full" disabled={isSending || phone.length < 10}>
+              {/* reCAPTCHA Container */}
+              <div ref={recaptchaContainerRef} id="recaptcha-container" className="flex justify-center"></div>
+
+              {error && (<p className="text-sm text-destructive my-2 text-center">{error}</p>)}
+
+              <Button type="submit" className="w-full" disabled={isSending || phone.length < 10 || !isCaptchaVerified}>
                 {isSending ? <LoadingSpinner message="Sending OTP..." /> : 'Send OTP'}
               </Button>
             </form>
@@ -185,13 +225,14 @@ export default function LoginPage() {
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   required
+                  autoFocus
                 />
               </div>
-              {error && (<p className="text-sm text-destructive">{error}</p>)}
+              {error && (<p className="text-sm text-destructive my-2">{error}</p>)}
               <Button type="submit" className="w-full" disabled={isVerifying || code.length < 6}>
                 {isVerifying ? <LoadingSpinner message="Verifying..." /> : 'Verify & Continue'}
               </Button>
-              <Button type="button" variant="ghost" className="w-full" onClick={() => { setShowOtpForm(false); setCode(''); setError(null); }}>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => { setShowOtpForm(false); setCode(''); setError(null); setIsCaptchaVerified(false); }}>
                 Use a different number
               </Button>
             </form>
