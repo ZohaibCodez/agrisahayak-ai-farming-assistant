@@ -1,6 +1,7 @@
 "use server";
 
 import { marketplaceAgent, Supplier } from "@/ai/flows/marketplace-agent";
+import { createSupplierContact } from "@/lib/repositories";
 
 export async function searchSuppliers(
   query: string,
@@ -54,5 +55,50 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
   } catch (error) {
     console.error('Get supplier error:', error);
     return null;
+  }
+}
+
+export async function generateNegotiationMessage(
+  supplierName: string,
+  products: string[],
+  quantity?: string,
+  priceRange?: string
+): Promise<string> {
+  try {
+    // Simple template-based message generation for client-side use
+    const productsText = products.join(', ');
+    const quantityText = quantity ? `I need approximately ${quantity}.` : '';
+    const budgetText = priceRange ? `My budget is around ${priceRange}.` : '';
+    
+    return `السلام علیکم,
+
+I am interested in purchasing ${productsText}. ${quantityText} ${budgetText}
+
+Please share your best rates and availability at your earliest convenience.
+
+JazakAllah.`;
+  } catch (error) {
+    console.error('Error generating message:', error);
+    return `السلام علیکم, I am interested in purchasing ${products.join(', ')}. Please share your best rates and availability.`;
+  }
+}
+
+export async function sendMessageToSupplier(
+  userId: string,
+  supplierId: string,
+  message: string,
+  contactMethod: 'phone' | 'whatsapp' | 'email' = 'whatsapp'
+): Promise<boolean> {
+  try {
+    await createSupplierContact({
+      userId,
+      supplierId,
+      message,
+      contactMethod
+    });
+    return true;
+  } catch (error) {
+    console.error('Error sending message:', error);
+    return false;
   }
 }

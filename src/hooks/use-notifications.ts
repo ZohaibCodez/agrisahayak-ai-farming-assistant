@@ -29,13 +29,23 @@ export function useNotifications() {
 
   const initializeNotificationSystem = async () => {
     try {
-      // Register service worker
+      // Check if notifications are supported
+      if (!isSupported) {
+        console.log('Notifications not supported in this browser');
+        return;
+      }
+      
+      // Register service worker (optional, won't break if it fails)
       if ('serviceWorker' in navigator) {
-        const registration = await navigator.serviceWorker.register('/sw.js');
-        console.log('Service Worker registered:', registration);
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          console.log('Service Worker registered:', registration);
+        } catch (swError) {
+          console.warn('Service Worker registration failed (non-critical):', swError);
+        }
       }
 
-      // Initialize notifications
+      // Initialize notifications (with proper error handling)
       const token = await initializeNotifications();
       
       if (token && user) {
@@ -44,7 +54,7 @@ export function useNotifications() {
         console.log('FCM token saved for user:', user.uid);
       }
 
-      // Set up message listener
+      // Set up message listener (won't throw if messaging not supported)
       setupMessageListener();
 
       setIsInitialized(true);

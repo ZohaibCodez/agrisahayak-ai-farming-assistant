@@ -130,7 +130,7 @@ export async function listLogs(max: number = 50): Promise<AdminLog[]> {
     return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as AdminLog));
 }
 
-// Suppliers
+// Suppliers - Enhanced with full Firestore integration
 export async function seedSuppliers(suppliers: Omit<Supplier, 'id'>[]): Promise<void> {
     const db = getDb();
     const ref = collection(db, 'suppliers');
@@ -138,7 +138,11 @@ export async function seedSuppliers(suppliers: Omit<Supplier, 'id'>[]): Promise<
     if (existing.empty) {
         console.log("Seeding suppliers...");
         for (const supplier of suppliers) {
-            await addDoc(ref, supplier);
+            await addDoc(ref, {
+                ...supplier,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
         }
         console.log("Seeding complete.");
     }
@@ -152,46 +156,214 @@ export async function listSuppliers(): Promise<Supplier[]> {
     return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Supplier));
 }
 
-// Marketplace helpers
-// NOTE: This is a simple geo-distance filter using stored lat/lon on suppliers.
-// For production, consider integrating with a geospatial index (e.g., Firestore GeoPoint + geohash library or Cloud Firestore's built-in support).
-export async function findSuppliersNearby(lat: number, lon: number, radiusKm: number = 50, maxResults: number = 20): Promise<Supplier[]> {
+export async function getSupplierById(supplierId: string): Promise<Supplier | null> {
     const db = getDb();
-    const ref = collection(db, 'suppliers');
-    const snap = await getDocs(ref);
-    const suppliers = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Supplier & { lat?: number; lon?: number }));
-
-    function haversine(aLat: number, aLon: number, bLat: number, bLon: number) {
-        const toRad = (v: number) => (v * Math.PI) / 180;
-        const R = 6371; // km
-        const dLat = toRad(bLat - aLat);
-        const dLon = toRad(bLon - aLon);
-        const lat1 = toRad(aLat);
-        const lat2 = toRad(bLat);
-        const sinDLat = Math.sin(dLat / 2) * Math.sin(dLat / 2);
-        const sinDLon = Math.sin(dLon / 2) * Math.sin(dLon / 2);
-        const a = sinDLat + Math.cos(lat1) * Math.cos(lat2) * sinDLon;
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }
-
-    const results = suppliers
-        .map(s => ({ ...s, distance: typeof s.lat === 'number' && typeof s.lon === 'number' ? haversine(lat, lon, s.lat, s.lon) : Infinity }))
-        .filter(s => s.distance !== Infinity && s.distance <= radiusKm)
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, maxResults)
-        .map(s => ({ id: s.id, name: s.name, location: s.location, distance: Math.round((s.distance ?? 0) * 10) / 10, products: s.products, rating: s.rating, phone: s.phone, whatsappLink: s.whatsappLink } as Supplier));
-
-    return results;
+    const ref = doc(db, 'suppliers', supplierId);
+    const snap = await getDoc(ref);
+    return snap.exists() ? ({ id: snap.id, ...snap.data() } as Supplier) : null;
 }
 
-export async function createMarketplaceListing(listing: { sellerId: string; title: string; description?: string; price: number; location?: string; contact?: string; tags?: string[]; createdAt?: any }): Promise<string> {
+export async function createSupplier(supplier: Omit<Supplier, 'id'>): Promise<string> {
+    const db = getDb();
+    const ref = collection(db, 'suppliers');
+    const docRef = await addDoc(ref, {
+        ...supplier,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+}
+
+export async function updateSupplier(supplierId: string, data: Partial<Supplier>): Promise<void> {
+    const db = getDb();
+    const ref = doc(db, 'suppliers', supplierId);
+    await updateDoc(ref, {
+        ...data,
+        updatedAt: serverTimestamp()
+    });
+}
+
+export async function searchSuppliersByLocation(
+    lat: number,
+    lng: number,
+    radiusKm: number = 50,
+    filters?: {
+        type?: string[];
+        products?: string[];
+        minRating?: number;
+        maxDistance?: number;
+    }
+): Promise<Supplier[]> {
+    const db = getDb();
+    const ref = collection(db, 'suppliers');
+    
+    // Start with basic query
+    let q = query(ref);
+    
+    // Apply filters if provided
+    if (filters?.type && filters.type.length > 0) {
+        q = query(ref, where('type', 'in', filters.type));
+    }
+    
+    if (filters?.minRating) {
+        q = query(ref, where('rating', '>=', filters.minRating));
+    }
+    
+    const snap = await getDocs(q);
+    const suppliers = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as Supplier));
+    
+    // Calculate distances and filter by radius
+    const suppliersWithDistance = suppliers
+        .map(supplier => {
+            const distance = calculateHaversineDistance(
+                lat,
+                lng,
+                supplier.location.coordinates.lat,
+                supplier.location.coordinates.lng
+            );
+            return { ...supplier, distance };
+        })
+        .filter(s => s.distance <= (filters?.maxDistance || radiusKm))
+        .sort((a, b) => a.distance - b.distance);
+    
+    // Apply product filter if provided
+    if (filters?.products && filters.products.length > 0) {
+        return suppliersWithDistance.filter(supplier =>
+            filters.products!.some(product =>
+                supplier.products.some(p =>
+                    p.toLowerCase().includes(product.toLowerCase())
+                )
+            )
+        );
+    }
+    
+    return suppliersWithDistance;
+}
+
+// Haversine distance calculation
+function calculateHaversineDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+    const toRad = (value: number) => (value * Math.PI) / 180;
+    const R = 6371; // Earth's radius in kilometers
+    
+    const dLat = toRad(lat2 - lat1);
+    const dLng = toRad(lng2 - lng1);
+    
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
+
+// Marketplace helpers with real Firestore integration
+export async function findSuppliersNearby(lat: number, lon: number, radiusKm: number = 50, maxResults: number = 20): Promise<Supplier[]> {
+    return searchSuppliersByLocation(lat, lon, radiusKm, { maxDistance: radiusKm });
+}
+
+export async function createMarketplaceListing(listing: { 
+    sellerId: string; 
+    title: string; 
+    description?: string; 
+    price: number; 
+    location?: string; 
+    contact?: string; 
+    tags?: string[]; 
+    createdAt?: any 
+}): Promise<string> {
     const db = getDb();
     const ref = collection(db, 'marketplace');
     const now = serverTimestamp();
-    const docRef = await addDoc(ref, { ...listing, createdAt: listing.createdAt ?? now, status: 'active' } as any);
+    const docRef = await addDoc(ref, { 
+        ...listing, 
+        createdAt: listing.createdAt ?? now, 
+        updatedAt: now,
+        status: 'active' 
+    } as any);
     return docRef.id;
 }
+
+export async function getMarketplaceListings(filters?: {
+    sellerId?: string;
+    tags?: string[];
+    minPrice?: number;
+    maxPrice?: number;
+}): Promise<any[]> {
+    const db = getDb();
+    const ref = collection(db, 'marketplace');
+    let q = query(ref, where('status', '==', 'active'), orderBy('createdAt', 'desc'));
+    
+    if (filters?.sellerId) {
+        q = query(ref, where('sellerId', '==', filters.sellerId), where('status', '==', 'active'));
+    }
+    
+    const snap = await getDocs(q);
+    let listings = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+    
+    // Apply client-side filters
+    if (filters?.minPrice) {
+        listings = listings.filter(l => l.price && l.price >= filters.minPrice!);
+    }
+    if (filters?.maxPrice) {
+        listings = listings.filter(l => l.price && l.price <= filters.maxPrice!);
+    }
+    
+    return listings;
+}
+
+// Contact/Communication functions
+export async function createSupplierContact(contactData: {
+    userId: string;
+    supplierId: string;
+    message: string;
+    contactMethod: 'phone' | 'whatsapp' | 'email';
+}): Promise<string> {
+    const db = getDb();
+    const ref = collection(db, 'supplier_contacts');
+    const docRef = await addDoc(ref, {
+        ...contactData,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+    });
+    return docRef.id;
+}
+
+export async function getSupplierContactHistory(userId: string, supplierId?: string): Promise<any[]> {
+    const db = getDb();
+    const ref = collection(db, 'supplier_contacts');
+    
+    let q = supplierId 
+        ? query(ref, where('userId', '==', userId), where('supplierId', '==', supplierId), orderBy('createdAt', 'desc'))
+        : query(ref, where('userId', '==', userId), orderBy('createdAt', 'desc'));
+    
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+export async function updateSupplierRating(supplierId: string, userId: string, rating: number, review?: string): Promise<void> {
+    const db = getDb();
+    
+    // Add rating to ratings collection
+    const ratingsRef = collection(db, 'supplier_ratings');
+    await addDoc(ratingsRef, {
+        supplierId,
+        userId,
+        rating,
+        review,
+        createdAt: serverTimestamp()
+    });
+    
+    // Calculate new average rating
+    const allRatingsSnap = await getDocs(query(ratingsRef, where('supplierId', '==', supplierId)));
+    const ratings = allRatingsSnap.docs.map(d => d.data().rating);
+    const averageRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
+    
+    // Update supplier's rating
+    await updateSupplier(supplierId, { rating: Math.round(averageRating * 10) / 10 });
+}
+
 
 // Coordinator / Agent decision logging helper
 export async function createAgentDecisionLog(agentName: AdminLog['agentName'], action: string, reportId?: string, payload?: Record<string, any>, status: AdminLog['status'] = 'info', duration?: number): Promise<string> {

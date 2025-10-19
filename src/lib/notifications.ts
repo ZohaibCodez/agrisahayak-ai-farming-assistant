@@ -1,11 +1,42 @@
-import { getMessaging, getToken, onMessage, MessagePayload } from 'firebase/messaging';
+import { getMessaging, getToken, onMessage, MessagePayload, Messaging } from 'firebase/messaging';
 import { doc, setDoc, getDoc, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 import { getDb, getApp } from './firestore';
 
 // Get Firebase instances
 const app = getApp();
 const db = getDb();
-const messaging = getMessaging(app);
+
+// Lazy initialize messaging only when needed and supported
+let messaging: Messaging | null = null;
+
+function getMessagingInstance(): Messaging | null {
+  if (typeof window === 'undefined') {
+    return null; // Server-side
+  }
+  
+  // Check if browser supports messaging
+  if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+    console.warn('Firebase Messaging not supported in this browser');
+    return null;
+  }
+  
+  // Check if running on HTTPS (required for FCM)
+  if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+    console.warn('Firebase Messaging requires HTTPS');
+    return null;
+  }
+  
+  if (!messaging) {
+    try {
+      messaging = getMessaging(app);
+    } catch (error) {
+      console.warn('Failed to initialize Firebase Messaging:', error);
+      return null;
+    }
+  }
+  
+  return messaging;
+}
 
 // Notification types
 export enum NotificationType {
@@ -35,12 +66,18 @@ const VAPID_KEY = process.env.NEXT_PUBLIC_VAPID_KEY || 'your-vapid-key';
 // Initialize notifications
 export async function initializeNotifications(): Promise<string | null> {
   try {
+    const messagingInstance = getMessagingInstance();
+    if (!messagingInstance) {
+      console.log('Messaging not supported in this environment');
+      return null;
+    }
+    
     // Request permission
     const permission = await Notification.requestPermission();
     
     if (permission === 'granted') {
       // Get FCM token
-      const token = await getToken(messaging, {
+      const token = await getToken(messagingInstance, {
         vapidKey: VAPID_KEY
       });
       
@@ -185,24 +222,34 @@ export async function markAllNotificationsAsRead(userId: string): Promise<void> 
 
 // Set up message listener
 export function setupMessageListener(): void {
-  onMessage(messaging, (payload: MessagePayload) => {
-    console.log('Message received:', payload);
-    
-    // Show notification
-    if (payload.notification) {
-      const { title, body } = payload.notification;
-      
-      // Create browser notification
-      if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification(title || 'AgriSahayak', {
-          body: body || '',
-          icon: '/icon-192x192.png',
-          badge: '/badge-72x72.png',
-          tag: 'agrisahayak-notification'
-        });
-      }
+  try {
+    const messagingInstance = getMessagingInstance();
+    if (!messagingInstance) {
+      console.log('Message listener not available - messaging not supported');
+      return;
     }
-  });
+    
+    onMessage(messagingInstance, (payload: MessagePayload) => {
+      console.log('Message received:', payload);
+      
+      // Show notification
+      if (payload.notification) {
+        const { title, body } = payload.notification;
+        
+        // Create browser notification
+        if ('Notification' in window && Notification.permission === 'granted') {
+          new Notification(title || 'AgriSahayak', {
+            body: body || '',
+            icon: '/icon-192x192.png',
+            badge: '/badge-72x72.png',
+            tag: 'agrisahayak-notification'
+          });
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error setting up message listener:', error);
+  }
 }
 
 // Weather alert notification

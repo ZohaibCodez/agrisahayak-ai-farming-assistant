@@ -8,44 +8,13 @@ import { MapPin, Star, Phone, MessageCircle, Clock, Truck, Award, Users, Search,
 import { useEffect, useState } from "react";
 import LoadingSpinner from "./loading-spinner";
 import { searchSuppliers } from "@/lib/actions/marketplace-actions";
+import ContactSupplierDialog from "./contact-supplier-dialog";
 
-// Define Supplier type locally to avoid server-side imports
-export interface Supplier {
-  id: string;
-  name: string;
-  type: 'supplier' | 'buyer' | 'logistics';
-  location: {
-    address: string;
-    coordinates: {
-      lat: number;
-      lng: number;
-    };
-    city: string;
-    province: string;
-  };
-  products?: string[];
-  services?: string[];
-  contact: {
-    phone: string;
-    email?: string;
-    whatsapp?: string;
-  };
-  rating?: number;
-  distance?: number;
-  availability?: 'available' | 'unavailable' | 'limited' | 'busy';
-  pricing?: {
-    competitive: boolean;
-    notes?: string;
-  };
-  verification: {
-    verified: boolean;
-    documents?: string[];
-  };
-}
+// Use the unified Supplier type from models
+import type { Supplier } from "@/lib/models";
 import { useAuth } from "@/firebase";
 import { getProfile } from "@/lib/repositories";
 import { UserProfile } from "@/lib/models";
-import { marketplaceAgent } from "@/ai/flows/marketplace-agent";
 
 export default function SuppliersCard() {
     const { user } = useAuth();
@@ -54,6 +23,75 @@ export default function SuppliersCard() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterType, setFilterType] = useState<string>('all');
+    const [userLocation, setUserLocation] = useState<{ lat: number; lng: number; city?: string } | null>(null);
+    const [locationLoading, setLocationLoading] = useState(true);
+    const [locationError, setLocationError] = useState<string | null>(null);
+
+    // Get user's real-time GPS location
+    useEffect(() => {
+        const getUserLocation = async () => {
+            setLocationLoading(true);
+            
+            // First, try to get location from user profile
+            if (profile?.lat && profile?.lon) {
+                setUserLocation({
+                    lat: profile.lat,
+                    lng: profile.lon,
+                    city: profile.location || undefined
+                });
+                setLocationLoading(false);
+                return;
+            }
+            
+            // If not in profile, try to get browser geolocation
+            if ('geolocation' in navigator) {
+                try {
+                    const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, {
+                            enableHighAccuracy: true,
+                            timeout: 10000,
+                            maximumAge: 300000 // 5 minutes cache
+                        });
+                    });
+                    
+                    const { latitude, longitude } = position.coords;
+                    
+                    // Reverse geocode to get city name
+                    const city = await getCityFromCoordinates(latitude, longitude);
+                    
+                    setUserLocation({
+                        lat: latitude,
+                        lng: longitude,
+                        city
+                    });
+                    
+                    setLocationError(null);
+                } catch (error) {
+                    console.error('Geolocation error:', error);
+                    setLocationError('Unable to get your location. Using default location.');
+                    
+                    // Fallback to default location (Lahore, Pakistan)
+                    setUserLocation({
+                        lat: 31.5204,
+                        lng: 74.3587,
+                        city: 'Lahore'
+                    });
+                }
+            } else {
+                setLocationError('Geolocation not supported by browser');
+                // Fallback to default location
+                setUserLocation({
+                    lat: 31.5204,
+                    lng: 74.3587,
+                    city: 'Lahore'
+                });
+            }
+            
+            setLocationLoading(false);
+        };
+        
+        getUserLocation();
+    }, [profile]);
 
     useEffect(() => {
         if (user && !profile) {
@@ -67,14 +105,28 @@ export default function SuppliersCard() {
             try {
                 setLoading(true);
                 
-                // Use server action for geolocation-based search
-                if (profile?.lat && profile?.lon) {
+                // Wait for location to be available
+                if (locationLoading || !userLocation) {
+                    return;
+                }
+                
+                // Fetch REAL suppliers from the internet using external API
+                const response = await fetch(
+                    `/api/suppliers/real?lat=${userLocation.lat}&lng=${userLocation.lng}&radius=${50000}` // 50km in meters
+                );
+                
+                const data = await response.json();
+                
+                if (!cancel && data.success && data.suppliers) {
+                    setSuppliers(data.suppliers);
+                } else {
+                    // Fallback to database search if external API fails
                     const result = await searchSuppliers(
                         searchQuery || 'agricultural supplies',
                         {
-                            lat: profile.lat,
-                            lng: profile.lon,
-                            radius: 50 // 50km radius
+                            lat: userLocation.lat,
+                            lng: userLocation.lng,
+                            radius: 50
                         },
                         {
                             type: filterType === 'all' ? undefined : [filterType as 'supplier' | 'buyer' | 'logistics'],
@@ -84,43 +136,6 @@ export default function SuppliersCard() {
                     
                     if (!cancel) {
                         setSuppliers(result.suppliers);
-                    }
-                } else {
-                    // Fallback to mock data if no location
-                    const mockSuppliers = [
-                        {
-                            id: "supplier-1",
-                            name: "Green Valley Seeds & Fertilizers",
-                            type: "supplier" as const,
-                            location: {
-                                address: "123 Agriculture Road, Model Town",
-                                coordinates: { lat: 31.5204, lng: 74.3587 },
-                                city: "Lahore",
-                                province: "Punjab"
-                            },
-                            products: ["Seeds", "Fertilizers", "Pesticides", "Farming Tools"],
-                            services: ["Delivery", "Consultation", "Bulk Orders"],
-                            contact: {
-                                phone: "+92-300-1234567",
-                                email: "info@greenvalley.com",
-                                whatsapp: "+92-300-1234567"
-                            },
-                            rating: 4.5,
-                            distance: 5.2,
-                            availability: "available" as const,
-                            pricing: {
-                                competitive: true,
-                                notes: "Best prices in the area"
-                            },
-                            verification: {
-                                verified: true,
-                                documents: ["Business License", "Tax Certificate"]
-                            }
-                        }
-                    ];
-                    
-                    if (!cancel) {
-                        setSuppliers(mockSuppliers);
                     }
                 }
             } catch (error) {
@@ -140,7 +155,35 @@ export default function SuppliersCard() {
         return () => {
             cancel = true;
         };
-    }, [profile, searchQuery, filterType]);
+    }, [userLocation, locationLoading, searchQuery, filterType]);
+    
+    // Helper function to get city name from coordinates
+    const getCityFromCoordinates = async (lat: number, lng: number): Promise<string> => {
+        try {
+            // Using OpenStreetMap Nominatim for reverse geocoding (free, no API key needed)
+            const response = await fetch(
+                `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`,
+                {
+                    headers: {
+                        'User-Agent': 'AgriSahayak/1.0'
+                    }
+                }
+            );
+            
+            if (response.ok) {
+                const data = await response.json();
+                const city = data.address?.city || 
+                            data.address?.town || 
+                            data.address?.village || 
+                            data.address?.state || 
+                            'Unknown Location';
+                return city;
+            }
+        } catch (error) {
+            console.error('Reverse geocoding error:', error);
+        }
+        return 'Unknown Location';
+    };
 
     return (
         <Card className="shadow-lg border-0 bg-gradient-to-br from-white to-blue-50/30">
@@ -154,8 +197,30 @@ export default function SuppliersCard() {
                             Nearby Suppliers
                         </CardTitle>
                         <CardDescription className="text-base mt-2">
-                            Find trusted local suppliers for your treatment plan materials.
+                            {locationLoading ? (
+                                <span className="flex items-center gap-2">
+                                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                                    Detecting your location...
+                                </span>
+                            ) : userLocation ? (
+                                <span className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-green-600" />
+                                    <span className="font-medium text-green-700">
+                                        {userLocation.city || 'Your Location'}
+                                    </span>
+                                    <span className="text-gray-500">
+                                        • {suppliers.length} suppliers within 50 km
+                                    </span>
+                                </span>
+                            ) : (
+                                <span className="text-amber-600">Location unavailable - showing default results</span>
+                            )}
                         </CardDescription>
+                        {locationError && (
+                            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                                ⚠️ {locationError}
+                            </p>
+                        )}
                     </div>
                     <Badge variant="secondary" className="px-3 py-1 text-sm">
                         <Users className="h-4 w-4 mr-1"/>
@@ -165,7 +230,11 @@ export default function SuppliersCard() {
             </CardHeader>
             
             <CardContent className="space-y-6">
-                {loading ? (
+                {locationLoading ? (
+                    <div className="flex items-center justify-center p-12">
+                        <LoadingSpinner message="Getting your location and finding nearby suppliers..." variant="sparkle" />
+                    </div>
+                ) : loading ? (
                     <div className="flex items-center justify-center p-12">
                         <LoadingSpinner message="Finding local suppliers..." variant="sparkle" />
                     </div>
@@ -181,7 +250,12 @@ export default function SuppliersCard() {
                             <Truck className="h-8 w-8 text-gray-400" />
                         </div>
                         <p className="text-gray-500 text-lg">No suppliers found in your area.</p>
-                        <p className="text-gray-400 text-sm mt-1">Try expanding your search radius or check back later.</p>
+                        <p className="text-gray-400 text-sm mt-1">
+                            {userLocation ? 
+                                `Try expanding your search radius beyond ${userLocation.city}` : 
+                                'Enable location access to find nearby suppliers'
+                            }
+                        </p>
                     </div>
                 )}
             </CardContent>
@@ -190,6 +264,8 @@ export default function SuppliersCard() {
 }
 
 const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }) => {
+    const { user } = useAuth();
+    
     const getRatingColor = (rating: number) => {
         if (rating >= 4.5) return "text-green-600 bg-green-100";
         if (rating >= 4.0) return "text-blue-600 bg-blue-100";
@@ -197,12 +273,28 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
         return "text-gray-600 bg-gray-100";
     };
 
-        const getDistanceColor = (distance: number | undefined) => {
-            if (!distance) return "text-gray-600 bg-gray-100";
-            if (distance <= 5) return "text-green-600 bg-green-100";
-            if (distance <= 15) return "text-blue-600 bg-blue-100";
-            return "text-orange-600 bg-orange-100";
+    const getDistanceColor = (distance: number | undefined) => {
+        if (!distance) return "text-gray-600 bg-gray-100";
+        if (distance <= 5) return "text-green-600 bg-green-100";
+        if (distance <= 15) return "text-blue-600 bg-blue-100";
+        return "text-orange-600 bg-orange-100";
+    };
+
+    const getSupplierTypeLabel = (type: string) => {
+        const typeMap: Record<string, string> = {
+            'supplier': 'Supplier',
+            'buyer': 'Buyer',
+            'logistics': 'Logistics'
         };
+        return typeMap[type] || 'Supplier';
+    };
+
+    const getRatingLabel = (rating: number) => {
+        if (rating >= 4.5) return 'Excellent';
+        if (rating >= 4.0) return 'Good';
+        if (rating >= 3.5) return 'Fair';
+        return 'Poor';
+    };
 
     return (
         <div className="group border rounded-xl p-6 bg-white/80 backdrop-blur-sm hover:shadow-lg hover:scale-[1.02] transition-all duration-300 border-gray-200">
@@ -217,22 +309,26 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
                             <div className="flex items-center gap-4 mt-2">
                                 <div className="flex items-center gap-1">
                                     <MapPin className="h-4 w-4 text-gray-500" />
-                                    <span className="text-sm text-gray-600">{supplier.distance ? supplier.distance.toFixed(1) : 'Unknown'} km away</span>
+                                    <span className="text-sm text-gray-600">
+                                        {supplier.distance !== undefined ? `${supplier.distance.toFixed(1)} km away` : 'Distance unknown'}
+                                    </span>
                                 </div>
                                 <div className="flex items-center gap-1">
-                                    <Star className="h-4 w-4 text-amber-500" />
-                                    <span className="text-sm font-medium">{supplier.rating || 'N/A'}</span>
+                                    <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+                                    <span className="text-sm font-medium">
+                                        {supplier.rating && supplier.rating > 0 ? supplier.rating.toFixed(1) : 'No rating'}
+                                    </span>
                                 </div>
                             </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-end">
                             <Badge className={`px-2 py-1 text-xs ${getRatingColor(supplier.rating || 0)}`}>
                                 <Award className="h-3 w-3 mr-1" />
-                                {(supplier.rating || 0) >= 4.5 ? 'Excellent' : (supplier.rating || 0) >= 4.0 ? 'Good' : 'Fair'}
+                                {getRatingLabel(supplier.rating || 0)}
                             </Badge>
-                                <Badge className={`px-2 py-1 text-xs ${getDistanceColor(supplier.distance)}`}>
-                                    {!supplier.distance ? 'Unknown' : supplier.distance <= 5 ? 'Nearby' : supplier.distance <= 15 ? 'Close' : 'Far'}
-                                </Badge>
+                            <Badge variant="secondary" className="px-2 py-1 text-xs">
+                                {getSupplierTypeLabel(supplier.type)}
+                            </Badge>
                         </div>
                     </div>
 
@@ -253,7 +349,7 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
                 </div>
 
                 {/* Action Buttons */}
-                <div className="flex flex-col sm:flex-row lg:flex-col gap-3 lg:w-48">
+                <div className="flex flex-col gap-3 lg:w-48">
                         <Button 
                             variant="default" 
                             size="sm" 
@@ -276,6 +372,11 @@ const SupplierCard = ({ supplier, index }: { supplier: Supplier, index: number }
                                 WhatsApp
                             </a>
                         </Button>
+                        <ContactSupplierDialog 
+                            supplier={supplier} 
+                            userId={user?.uid}
+                            defaultProducts={(supplier.products || []).slice(0, 1)}
+                        />
                 </div>
             </div>
         </div>

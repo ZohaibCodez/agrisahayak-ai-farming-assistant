@@ -61,10 +61,32 @@ export type AdminLog = {
 export type Supplier = {
   id: string;
   name: string;
-  location: string;
-  distance: number;
+  type: 'supplier' | 'buyer' | 'logistics';
+  location: {
+    address: string;
+    coordinates: {
+      lat: number;
+      lng: number;
+    };
+    city: string;
+    province: string;
+  };
   products: string[];
+  services: string[];
+  contact: {
+    phone: string;
+    email?: string;
+    whatsapp?: string;
+  };
   rating: number;
-  phone: string;
-  whatsappLink: string;
+  distance?: number;
+  availability: 'available' | 'busy' | 'unavailable';
+  pricing: {
+    competitive: boolean;
+    notes?: string;
+  };
+  verification: {
+    verified: boolean;
+    documents?: string[];
+  };
 };
