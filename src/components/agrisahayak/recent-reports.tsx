@@ -23,6 +23,7 @@ export default function RecentReports() {
     const [reports, setReports] = useState<DiagnosisReport[]>([]);
     const [loading, setLoading] = useState(true);
     const [retryingReports, setRetryingReports] = useState<Set<string>>(new Set());
+    const [showAll, setShowAll] = useState(false); // Track if showing all reports
     const { toast } = useToast();
 
     useEffect(() => {
@@ -36,7 +37,7 @@ export default function RecentReports() {
         const fetchReports = async () => {
             setLoading(true);
             try {
-                const items = await listRecentReports(user.uid, 10);
+                const items = await listRecentReports(user.uid, 50); // Fetch up to 50 reports
                 if (!cancel) setReports(items);
             } catch (error) {
                 console.error('Error fetching reports:', error);
@@ -48,6 +49,9 @@ export default function RecentReports() {
         fetchReports();
         return () => { cancel = true; };
     }, [user]);
+    
+    // Show only first 5 reports by default, or all if showAll is true
+    const displayedReports = showAll ? reports : reports.slice(0, 5);
 
     const getStatusVariant = (status: DiagnosisReport['status']) => {
         switch (status) {
@@ -280,19 +284,20 @@ export default function RecentReports() {
                         <LoadingSpinner message="Loading recent reports..." />
                     </div>
                 ) : reports.length > 0 ? (
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead className="w-[80px]">Image</TableHead>
-                                <TableHead>Crop</TableHead>
-                                <TableHead>Diagnosis</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Date</TableHead>
-                                <TableHead className="text-right">Action</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {reports.map((report) => (
+                    <>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="w-[80px]">Image</TableHead>
+                                    <TableHead>Crop</TableHead>
+                                    <TableHead>Diagnosis</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Date</TableHead>
+                                    <TableHead className="text-right">Action</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {displayedReports.map((report) => (
                                 <TableRow key={report.id} className="hover:bg-gray-50/50">
                                     <TableCell>
                                         <div className="relative">
@@ -398,6 +403,34 @@ export default function RecentReports() {
                             ))}
                         </TableBody>
                     </Table>
+                    
+                    {/* View All / Show Less Button */}
+                    {reports.length > 5 && (
+                        <div className="mt-4 text-center">
+                            <Button
+                                variant="outline"
+                                onClick={() => setShowAll(!showAll)}
+                                className="w-full md:w-auto"
+                            >
+                                {showAll ? (
+                                    <>
+                                        Show Less
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                        </svg>
+                                    </>
+                                ) : (
+                                    <>
+                                        View All ({reports.length} Reports)
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                        </svg>
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+                    )}
+                    </>
                 ) : (
                     <div className="text-center py-16">
                         <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-6">

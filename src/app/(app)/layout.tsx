@@ -151,22 +151,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </div>
                     
                     <div className="flex items-center gap-3">
-                        <AccessibleButton
-                            variant="ghost"
-                            size="sm"
-                            className="relative hover:bg-primary/10 hover:scale-105 transition-all duration-200"
-                            aria-label="View notifications (3 unread)"
-                            aria-describedby="notification-count"
-                        >
-                            <Bell className="h-5 w-5" aria-hidden="true" />
-                            <Badge 
-                                id="notification-count"
-                                className="absolute -top-1 -right-1 h-5 w-5 rounded-full p-0 text-xs"
-                                aria-label="3 unread notifications"
-                            >
-                                3
-                            </Badge>
-                        </AccessibleButton>
+                        {/* Notification bell removed - NotificationsPanel on dashboard provides full functionality */}
                         
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>

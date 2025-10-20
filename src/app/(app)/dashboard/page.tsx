@@ -9,7 +9,7 @@ import RecentReports from "@/components/agrisahayak/recent-reports";
 import WeatherAlertCard from "@/components/agrisahayak/weather-alert-card";
 import NotificationsPanel from "@/components/agrisahayak/notifications-panel";
 import { useAuth } from "@/firebase";
-import { getProfile, listRecentReports } from "@/lib/repositories";
+import { getProfile, listRecentReports, getTotalReportsCount } from "@/lib/repositories";
 import { useEffect, useState } from "react";
 import { UserProfile, DiagnosisReport } from "@/lib/models";
 import { SkeletonDashboard } from "@/components/ui/skeleton-enhanced";
@@ -21,22 +21,29 @@ export default function DashboardPage() {
     const { user } = useAuth();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [recentReports, setRecentReports] = useState<DiagnosisReport[]>([]);
+    const [totalReportsCount, setTotalReportsCount] = useState<number>(0);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (user) {
             getProfile(user.uid).then(setProfile);
-            listRecentReports(user.uid, 5).then(reports => {
+            
+            // Fetch both recent reports (for display) and total count (for metrics)
+            Promise.all([
+                listRecentReports(user.uid, 5),
+                getTotalReportsCount(user.uid)
+            ]).then(([reports, totalCount]) => {
                 setRecentReports(reports);
+                setTotalReportsCount(totalCount);
                 setLoading(false);
             });
         }
     }, [user]);
 
     // Calculate dashboard metrics
-    const totalReports = recentReports.length;
+    const totalReports = totalReportsCount; // Use the actual total count from all reports
     const completedReports = recentReports.filter(r => r.status === 'Complete').length;
-    const successRate = totalReports > 0 ? Math.round((completedReports / totalReports) * 100) : 0;
+    const successRate = recentReports.length > 0 ? Math.round((completedReports / recentReports.length) * 100) : 0; // Success rate based on recent reports
     const highSeverityReports = recentReports.filter(r => r.severity === 'High').length;
 
     if (loading) {
@@ -167,14 +174,9 @@ export default function DashboardPage() {
 
             {/* Recent Reports Section */}
             <div>
-                <div className="flex items-center justify-between mb-6">
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-900">Recent Reports</h2>
-                        <p className="text-gray-600">Your latest crop diagnosis reports</p>
-                    </div>
-                    <Button asChild variant="ghost">
-                        <Link href="/dashboard">View All</Link>
-                    </Button>
+                <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-gray-900">Recent Reports</h2>
+                    <p className="text-gray-600">Your latest crop diagnosis reports</p>
                 </div>
                 <RecentReports />
             </div>

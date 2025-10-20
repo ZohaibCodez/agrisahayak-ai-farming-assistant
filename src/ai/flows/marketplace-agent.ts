@@ -66,8 +66,8 @@ export type Supplier = z.infer<typeof SupplierSchema>;
 export type MarketplaceSearch = z.infer<typeof MarketplaceSearchSchema>;
 export type MarketplaceResult = z.infer<typeof MarketplaceResultSchema>;
 
-// Import Firestore functions
-import { searchSuppliersByLocation, seedSuppliers as seedSuppliersToFirestore } from '@/lib/repositories';
+// Import external suppliers API (no Firestore dependency - avoids permission issues)
+import { fetchRealSuppliersFromGooglePlaces, fetchRealSuppliersFromOpenStreetMap } from '@/lib/external-suppliers';
 
 // Mock supplier data for seeding - Distributed across major cities in Pakistan
 const SEED_SUPPLIERS: Omit<Supplier, 'id' | 'distance'>[] = [
@@ -396,15 +396,8 @@ const SEED_SUPPLIERS: Omit<Supplier, 'id' | 'distance'>[] = [
   }
 ];
 
-// Seed suppliers to Firestore (call once on initialization)
-export async function seedSuppliers(): Promise<void> {
-  try {
-    await seedSuppliersToFirestore(SEED_SUPPLIERS as any);
-    console.log('Suppliers seeded successfully');
-  } catch (error) {
-    console.error('Error seeding suppliers:', error);
-  }
-}
+// Note: Suppliers are now fetched from external API (no Firestore needed)
+// No need to seed suppliers since we use real data from OpenStreetMap/Google Places
 
 // Marketplace Agent Flow
 export const marketplaceAgent = ai.defineFlow(
@@ -415,32 +408,75 @@ export const marketplaceAgent = ai.defineFlow(
   },
   async (input) => {
     try {
-      // Step 1: Search suppliers from Firestore using location-based search
-      const nearbySuppliers = await searchSuppliersByLocation(
+      // Step 1: Search suppliers using external API (no Firestore - avoids permission issues)
+      // Converts radius from km to meters for the API
+      const radiusMeters = (input.filters?.maxDistance || input.location.radius) * 1000;
+      
+      console.log(`🔍 Searching for suppliers near location: ${input.location.lat}, ${input.location.lng} within ${radiusMeters/1000}km`);
+      
+      // Try Google Places first (best for real nearby businesses)
+      let nearbySuppliers = await fetchRealSuppliersFromGooglePlaces(
         input.location.lat,
         input.location.lng,
-        input.filters?.maxDistance || input.location.radius,
-        {
-          type: input.filters?.type,
-          products: input.filters?.products,
-          minRating: input.filters?.minRating,
-          maxDistance: input.filters?.maxDistance || input.location.radius
-        }
+        radiusMeters
       );
       
-      // Step 2: Ensure suppliers have all required fields
-      const formattedSuppliers = nearbySuppliers.map(supplier => ({
-        ...supplier,
-        distance: supplier.distance || 0,
-        availability: supplier.availability || 'available',
-        pricing: supplier.pricing || { competitive: true },
-        verification: supplier.verification || { verified: false }
-      })) as Supplier[];
+      // If Google Places returns no results, fall back to OpenStreetMap
+      if (!nearbySuppliers || nearbySuppliers.length === 0) {
+        console.log('⚠️ Google Places returned no results, trying OpenStreetMap...');
+        nearbySuppliers = await fetchRealSuppliersFromOpenStreetMap(
+          input.location.lat,
+          input.location.lng,
+          radiusMeters
+        );
+      }
       
-      // Step 3: Generate AI recommendations
+      console.log(`✅ Found ${nearbySuppliers.length} suppliers from external API`);
+      
+      // Step 2: Apply additional filters if provided
+      let filteredSuppliers = nearbySuppliers;
+      
+      if (input.filters?.type && input.filters.type.length > 0) {
+        filteredSuppliers = filteredSuppliers.filter(s => 
+          input.filters!.type!.includes(s.type)
+        );
+      }
+      
+      if (input.filters?.products && input.filters.products.length > 0) {
+        filteredSuppliers = filteredSuppliers.filter(supplier =>
+          input.filters!.products!.some(product =>
+            supplier.products.some(p =>
+              p.toLowerCase().includes(product.toLowerCase())
+            )
+          )
+        );
+      }
+      
+      if (input.filters?.minRating) {
+        filteredSuppliers = filteredSuppliers.filter(s => 
+          s.rating >= input.filters!.minRating!
+        );
+      }
+      
+      // Step 3: Ensure suppliers have all required fields (including id)
+      const formattedSuppliers = filteredSuppliers.map(supplier => {
+        // Ensure ID exists - generate one if missing
+        const supplierId = supplier.id || `supplier-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        return {
+          ...supplier,
+          id: supplierId,
+          distance: supplier.distance || 0,
+          availability: supplier.availability || 'available',
+          pricing: supplier.pricing || { competitive: true },
+          verification: supplier.verification || { verified: false }
+        } as Supplier;
+      });
+      
+      // Step 4: Generate AI recommendations
       const recommendations = await generateRecommendations(input, formattedSuppliers);
       
-      // Step 4: Generate market insights
+      // Step 5: Generate market insights
       const marketInsights = await generateMarketInsights(formattedSuppliers);
       
       return {

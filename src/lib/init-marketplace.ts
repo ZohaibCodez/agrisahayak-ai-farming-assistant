@@ -1,21 +1,12 @@
 /**
- * Initialize marketplace by seeding suppliers to Firestore
- * Run this once to populate the database with sample suppliers
+ * Initialize marketplace - no longer needed since we use external API
+ * Keeping file for backward compatibility but functionality removed
+ * Suppliers are now fetched from OpenStreetMap/Google Places in real-time
  */
 
-import { seedSuppliers } from '@/ai/flows/marketplace-agent';
-
 export async function initializeMarketplace() {
-  try {
-    console.log('Initializing marketplace...');
-    await seedSuppliers();
-    console.log('Marketplace initialized successfully!');
-    return true;
-  } catch (error) {
-    console.error('Failed to initialize marketplace:', error);
-    return false;
-  }
+  console.log('Marketplace uses external API - no initialization needed');
+  return true;
 }
 
-// Export for use in components or API routes
-export { seedSuppliers };
+// No seeding needed - using real-time external data

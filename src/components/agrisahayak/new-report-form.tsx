@@ -104,6 +104,14 @@ export default function NewReportForm() {
 
     const [report, setReport] = useState<DiagnosisReport | null>(null);
     const { toast } = useToast();
+    
+    // Track which report ID has had diagnosis/planning initiated to prevent duplicate generation
+    const diagnosisInitiatedForReportIdRef = useRef<string | null>(null);
+    const planningInitiatedForReportIdRef = useRef<string | null>(null);
+    
+    // Track if async operations are in progress
+    const diagnosisInProgressRef = useRef(false);
+    const planningInProgressRef = useRef(false);
 
     // Fetch user profile when user changes
     useEffect(() => {
@@ -116,7 +124,23 @@ export default function NewReportForm() {
 
     // Effect to run the diagnostic agent
     useEffect(() => {
-        if (loadingState === 'diagnosing' && user && report && report.imageUrl) {
+        const shouldRunDiagnosis = 
+            loadingState === 'diagnosing' && 
+            user && 
+            report && 
+            report.id &&
+            report.imageUrl && 
+            !report.disease && // Don't re-run if diagnosis already exists
+            diagnosisInitiatedForReportIdRef.current !== report.id &&
+            !diagnosisInProgressRef.current; // Don't start if already in progress
+            
+        if (shouldRunDiagnosis) {
+            diagnosisInitiatedForReportIdRef.current = report.id; // Mark this report ID as initiated
+            diagnosisInProgressRef.current = true; // Mark as in progress
+            
+            console.log(`🔵 Starting diagnosis for report ${report.id}`);
+            console.log(`   Report state:`, { disease: report.disease, imageUrl: !!report.imageUrl, loadingState });
+            
             (async () => {
                 const startTime = Date.now();
                 await createLog({ agentName: 'diagnosticAgent', action: 'diagnosis_started', reportId: report.id, status: 'info' });
@@ -126,6 +150,8 @@ export default function NewReportForm() {
                         photoDataUri,
                         symptoms
                     });
+                    
+                    console.log(`✅ Diagnosis completed for report ${report.id}: ${diagnosis.disease}, confidence: ${diagnosis.confidence}%`);
                     
                     await updateReport(user.uid, report.id, {
                         crop: diagnosis.crop, // Update crop with AI-detected crop
@@ -139,6 +165,7 @@ export default function NewReportForm() {
                     setReport(prev => prev ? { ...prev, ...diagnosis } : null);
                     await createLog({ agentName: 'diagnosticAgent', action: 'diagnosis_completed', reportId: report.id, status: 'success', duration: Date.now() - startTime, payload: diagnosis });
                     toast({ title: "Diagnosis Complete!", description: "Now generating your treatment plan.", className: "bg-green-100 text-green-800" });
+                    diagnosisInProgressRef.current = false; // Mark as complete
                     setLoadingState('planning');
                 } catch (e: any) {
                     console.error("Diagnostic agent error:", e);
@@ -150,16 +177,41 @@ export default function NewReportForm() {
                         }
                         await createLog({ agentName: 'diagnosticAgent', action: 'diagnosis_failed', reportId: report.id, status: 'error', duration: Date.now() - startTime, payload: { error: e?.message || String(e) } });
                         setError("AI service is temporarily unavailable. We've saved your report and will retry diagnosis. Please check back in a few minutes or try again.");
+                        diagnosisInProgressRef.current = false; // Mark as complete (failed)
+                        diagnosisInitiatedForReportIdRef.current = null; // Reset on error
                         setLoadingState('idle');
                 }
             })();
+        } else if (report?.disease && loadingState === 'diagnosing') {
+            // Diagnosis already exists, skip to planning
+            console.log(`⏭️ Skipping diagnosis for report ${report.id} - diagnosis already exists: ${report.disease}`);
+            setLoadingState('planning');
+        } else if (diagnosisInProgressRef.current && loadingState === 'diagnosing') {
+            console.log(`⏸️ Diagnosis already in progress for report ${report?.id}, blocking duplicate call`);
         }
-    }, [loadingState, user, report, imageFile, symptoms, toast]);
+    }, [loadingState, user, report?.id, report?.imageUrl, report?.disease, imageFile, symptoms, toast]);
 
     // Effect to run the planning agent
     useEffect(() => {
-        if (loadingState === 'planning' && user && report && report.disease) {
-             (async () => {
+        // CRITICAL: Only generate plan if it doesn't already exist to prevent infinite loop
+        // Use ref to track if planning has been initiated for this specific report ID
+        const shouldRunPlanning = 
+            loadingState === 'planning' && 
+            user && 
+            report && 
+            report.id &&
+            report.disease && 
+            !report.plan && 
+            planningInitiatedForReportIdRef.current !== report.id &&
+            !planningInProgressRef.current; // Don't start if already in progress
+            
+        if (shouldRunPlanning) {
+            planningInitiatedForReportIdRef.current = report.id; // Mark this report ID as initiated immediately
+            planningInProgressRef.current = true; // Mark as in progress
+            
+            console.log(`🔵 Starting treatment plan generation for report ${report.id}`);
+            
+            (async () => {
                 const startTime = Date.now();
                 await createLog({ agentName: 'actionPlannerAgent', action: 'planning_started', reportId: report.id, status: 'info' });
                 try {
@@ -168,21 +220,32 @@ export default function NewReportForm() {
                         crop: report.crop || 'Unknown', // Use AI-detected crop or fallback
                     });
                     
+                    console.log(`✅ Treatment plan generated for report ${report.id}, cost: PKR ${plan.totalCost}`);
+                    
                     await updateReport(user.uid, report.id, { plan: plan as any, status: 'Complete' });
                     setReport(prev => prev ? { ...prev, plan: plan as any, status: 'Complete' } : null);
                     
                     await createLog({ agentName: 'actionPlannerAgent', action: 'planning_completed', reportId: report.id, status: 'success', duration: Date.now() - startTime, payload: plan });
                     toast({ title: "Plan Ready!", description: "Your complete report is now available.", className: "bg-green-100 text-green-800" });
+                    planningInProgressRef.current = false; // Mark as complete
                     setLoadingState('done');
                 } catch (e: any) {
                     console.error("Action planner agent error:", e);
                     await createLog({ agentName: 'actionPlannerAgent', action: 'planning_failed', reportId: report.id, status: 'error', duration: Date.now() - startTime, payload: { error: e.message } });
                     setError("AI Treatment Plan Failed. Please try again.");
+                    planningInProgressRef.current = false; // Mark as complete (failed)
+                    planningInitiatedForReportIdRef.current = null; // Reset on error to allow retry
                     setLoadingState('error');
                 }
             })();
+        } else if (report?.plan && loadingState === 'planning') {
+            // Plan already exists, skip to done
+            console.log(`⏭️ Skipping plan generation for report ${report.id} - plan already exists (cost: PKR ${report.plan.totalCost})`);
+            setLoadingState('done');
+        } else if (planningInProgressRef.current && loadingState === 'planning') {
+            console.log(`⏸️ Planning already in progress for report ${report?.id}, blocking duplicate call`);
         }
-    }, [loadingState, user, report]);
+    }, [loadingState, user, report?.id, report?.disease, report?.crop, report?.plan, toast]); // Include report.plan to track when it's added
 
 
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -218,6 +281,11 @@ export default function NewReportForm() {
 
         setLoadingState('starting');
         setError(null);
+        // Reset all refs for new diagnosis (new report will get new ID)
+        diagnosisInitiatedForReportIdRef.current = null;
+        planningInitiatedForReportIdRef.current = null;
+        diagnosisInProgressRef.current = false;
+        planningInProgressRef.current = false;
         const startTime = Date.now();
         let reportId = '';
 

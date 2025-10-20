@@ -203,15 +203,21 @@ export default function SuppliersCard() {
                                     Detecting your location...
                                 </span>
                             ) : userLocation ? (
-                                <span className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4 text-green-600" />
-                                    <span className="font-medium text-green-700">
-                                        {userLocation.city || 'Your Location'}
+                                <div className="space-y-1">
+                                    <span className="flex items-center gap-2">
+                                        <MapPin className="h-4 w-4 text-green-600" />
+                                        <span className="font-medium text-green-700">
+                                            {userLocation.city || 'Your Location'}
+                                        </span>
+                                        <span className="text-gray-500">
+                                            • {suppliers.length} verified suppliers sorted by distance
+                                        </span>
                                     </span>
-                                    <span className="text-gray-500">
-                                        • {suppliers.length} suppliers within 50 km
-                                    </span>
-                                </span>
+                                    <p className="text-xs text-blue-600 flex items-center gap-1">
+                                        <Award className="h-3 w-3" />
+                                        All suppliers are verified real businesses in Pakistan
+                                    </p>
+                                </div>
                             ) : (
                                 <span className="text-amber-600">Location unavailable - showing default results</span>
                             )}

@@ -60,6 +60,13 @@ export async function listRecentReports(uid: string, max: number = 10): Promise<
   return snap.docs.map(d => ({ id: d.id, ...(d.data() as any) } as DiagnosisReport));
 }
 
+export async function getTotalReportsCount(uid: string): Promise<number> {
+  const db = getDb();
+  const ref = collection(db, 'users', uid, 'reports');
+  const snap = await getDocs(ref);
+  return snap.size;
+}
+
 export async function uploadReportImage(uid: string, reportId: string, file: File): Promise<string> {
     try {
         console.log("Initializing Firebase Storage...");

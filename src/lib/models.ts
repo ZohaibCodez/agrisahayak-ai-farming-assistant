@@ -34,7 +34,7 @@ export type DiagnosisReport = {
   disease: string;
   confidence: number; // 0-100
   affectedParts: string[];
-  severity: 'Low' | 'Medium' | 'High';
+  severity: 'None' | 'Low' | 'Medium' | 'High';
   description: string;
   plan?: {
     steps: TreatmentStep[];

@@ -17,8 +17,9 @@ export default function DiagnosisCard({ diagnosis, imageUrl }: DiagnosisCardProp
         return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/50 dark:text-red-300 dark:border-red-800';
     };
 
-    const getSeverityVariant = (severity: 'Low' | 'Medium' | 'High') => {
+    const getSeverityVariant = (severity: 'None' | 'Low' | 'Medium' | 'High') => {
         switch (severity) {
+            case 'None': return 'outline'; // Healthy plant - minimal visual emphasis
             case 'High': return 'destructive';
             case 'Medium': return 'secondary';
             case 'Low': return 'default';

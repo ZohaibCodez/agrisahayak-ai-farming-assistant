@@ -158,8 +158,9 @@ export default function ReportDetailPage() {
         );
     }
     
-    const getSeverityVariant = (severity: 'Low' | 'Medium' | 'High') => {
+    const getSeverityVariant = (severity: 'None' | 'Low' | 'Medium' | 'High') => {
         switch (severity) {
+            case 'None': return 'outline'; // Healthy plant - minimal visual emphasis
             case 'High': return 'destructive';
             case 'Medium': return 'secondary';
             case 'Low': return 'default';

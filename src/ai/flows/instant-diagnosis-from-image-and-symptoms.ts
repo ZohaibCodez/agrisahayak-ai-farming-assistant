@@ -26,14 +26,14 @@ export type InstantDiagnosisFromImageAndSymptomsInput = z.infer<
 >;
 
 const InstantDiagnosisFromImageAndSymptomsOutputSchema = z.object({
-  crop: z.string().describe('The type of crop identified in the image (e.g., Cotton, Wheat, Rice, Sugarcane, Maize, etc.).'),
-  disease: z.string().describe('The name of the disease or pest affecting the crop.'),
+  crop: z.string().describe('The type of crop identified in the image (e.g., Cotton, Wheat, Rice, Sugarcane, Maize, etc.). If crop cannot be identified, use "Unknown Crop".'),
+  disease: z.string().describe('The name of the disease or pest affecting the crop. Use "Healthy" ONLY if the plant shows absolutely no symptoms. If symptoms are present but disease cannot be identified, use "Unknown Disease" or "Unidentified Issue".'),
   confidence: z.number().describe('The confidence score (0-100) of the diagnosis.'),
-  affectedParts: z.string().array().describe('The parts of the crop affected by the disease or pest.'),
+  affectedParts: z.string().array().describe('The parts of the crop affected by the disease or pest. Use empty array [] for healthy plants.'),
   severity: z
-    .enum(['Low', 'Medium', 'High'])
-    .describe('The severity level of the disease or pest.'),
-  description: z.string().describe('A detailed description of the disease or pest and its symptoms.'),
+    .enum(['None', 'Low', 'Medium', 'High'])
+    .describe('The severity level of the disease or pest. Use "None" for healthy plants with no visible symptoms. Use Low/Medium/High only when disease is present.'),
+  description: z.string().describe('A detailed description of the disease or pest and its symptoms. For healthy plants, describe why it is considered healthy. For unidentified diseases, describe the visible symptoms even if the specific disease cannot be named.'),
 });
 
 export type InstantDiagnosisFromImageAndSymptomsOutput = z.infer<
@@ -60,14 +60,24 @@ Knowledge Base Context:
 {{knowledgeContext}}
 
 Based on the image analysis and the knowledge base context above, identify:
-1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops)
-2. Disease/pest name (if any) - use the knowledge base to match symptoms
+1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops). If unrecognizable, use "Unknown Crop".
+2. Disease/pest name:
+   - Use "Healthy" ONLY if plant shows absolutely NO visible symptoms (no spots, no yellowing, no wilting, etc.)
+   - If symptoms ARE visible but disease cannot be identified: use "Unknown Disease" or "Unidentified Leaf Spotting" (describe what you see)
+   - If you can match to knowledge base: use the specific disease name
 3. Confidence score (0-100%) - consider both image analysis and symptom matching
-4. Affected parts - from the knowledge base context
-5. Severity (Low/Medium/High) - based on knowledge base severity
-6. Description of the disease/pest and its symptoms - use knowledge base information
+4. Affected parts - from the knowledge base context. Use empty array [] for truly healthy plants.
+5. Severity:
+   - Use "None" ONLY for healthy plants with zero visible symptoms
+   - Use "Low" for minor symptoms
+   - Use "Medium" for moderate symptoms
+   - Use "High" for severe symptoms
+6. Description:
+   - For healthy: explain why it's considered healthy (green leaves, no spots, vigorous growth)
+   - For unknown disease: describe the visible symptoms in detail (yellowing, brown spots, size, location, etc.)
+   - For identified disease: use knowledge base information
 
-If no disease is visible or symptoms don't match known diseases, set disease to "Healthy" and confidence to 95+.
+CRITICAL: If you see yellowing, brown spots, wilting, or any abnormal appearance → DO NOT say "Healthy". Instead say "Unknown Disease" with appropriate severity.
 
 Respond in JSON format.`, // prettier-ignore
 });
@@ -129,14 +139,24 @@ Knowledge Base Context:
 ${knowledgeContext}
 
 Based on the image analysis and the knowledge base context above, identify:
-1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops)
-2. Disease/pest name (if any) - use the knowledge base to match symptoms
+1. Crop type (Cotton, Wheat, Rice, Sugarcane, Maize, or other common Pakistani crops). If unrecognizable, use "Unknown Crop".
+2. Disease/pest name:
+   - Use "Healthy" ONLY if plant shows absolutely NO visible symptoms (no spots, no yellowing, no wilting, etc.)
+   - If symptoms ARE visible but disease cannot be identified: use "Unknown Disease" or "Unidentified Leaf Spotting" (describe what you see)
+   - If you can match to knowledge base: use the specific disease name
 3. Confidence score (0-100%) - consider both image analysis and symptom matching
-4. Affected parts - from the knowledge base context
-5. Severity (Low/Medium/High) - based on knowledge base severity
-6. Description of the disease/pest and its symptoms - use knowledge base information
+4. Affected parts - from the knowledge base context. Use empty array [] for truly healthy plants.
+5. Severity:
+   - Use "None" ONLY for healthy plants with zero visible symptoms
+   - Use "Low" for minor symptoms
+   - Use "Medium" for moderate symptoms
+   - Use "High" for severe symptoms
+6. Description:
+   - For healthy: explain why it's considered healthy (green leaves, no spots, vigorous growth)
+   - For unknown disease: describe the visible symptoms in detail (yellowing, brown spots, size, location, etc.)
+   - For identified disease: use knowledge base information
 
-If no disease is visible or symptoms don't match known diseases, set disease to "Healthy" and confidence to 95+.
+CRITICAL: If you see yellowing, brown spots, wilting, or any abnormal appearance → DO NOT say "Healthy". Instead say "Unknown Disease" with appropriate severity.
 
 Respond in JSON format.`,
       });
