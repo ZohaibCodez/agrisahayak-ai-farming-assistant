@@ -2100,7 +2100,7 @@ Prompt 53:
 See on production leve, my website deplouyed on firebase hosting, and see on network this issue i am facing and my captcha not got rendered and got stuck:
 
 Request URL
-https://identitytoolkit.googleapis.com/v1/recaptchaParams?key=AIzaSyBCo2yHnjiB_SzIY6_nA8uhqP-_PF-mFK0
+https://identitytoolkit.googleapis.com/v1/recaptchaParams?key=YOUR_FIREBASE_API_KEY
 Request Method
 GET
 Status Code
@@ -2142,7 +2142,7 @@ identitytoolkit.googleapis.com
 :method
 GET
 :path
-/v1/recaptchaParams?key=AIzaSyBCo2yHnjiB_SzIY6_nA8uhqP-_PF-mFK0
+/v1/recaptchaParams?key=YOUR_FIREBASE_API_KEY
 :scheme
 https
 accept

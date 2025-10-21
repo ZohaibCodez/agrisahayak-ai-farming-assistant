@@ -377,7 +377,7 @@
 
 ### Prompt 18: reCAPTCHA 403 Error
 
-**User Request**: "See on production level, my website deployed on firebase hosting, and see on network this issue i am facing and my captcha not got rendered and got stuck: Request URL: https://identitytoolkit.googleapis.com/v1/recaptchaParams?key=AIzaSyBCo2yHnjiB_SzIY6_nA8uhqP-_PF-mFK0 Status Code: 403 Forbidden"
+**User Request**: "See on production level, my website deployed on firebase hosting, and see on network this issue i am facing and my captcha not got rendered and got stuck: Request URL: https://identitytoolkit.googleapis.com/v1/recaptchaParams?key=YOUR_FIREBASE_API_KEY Status Code: 403 Forbidden"
 
 **Issue**: Firebase Authentication reCAPTCHA failing on production
 

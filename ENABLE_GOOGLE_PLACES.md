@@ -74,5 +74,5 @@ Instead of fallback suppliers, you'll get:
 
 ---
 
-**Your API Key:** `AIzaSyCR6Wrv6c5UETTWqFwLblzy5RNp6kL1XIg`  
-**Status:** Key valid, just needs Places API enabled ✅
+**Your API Key:** Set in `.env.local` (not committed to git)  
+**Status:** Follow setup instructions to add your own API key ✅

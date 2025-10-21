@@ -384,7 +384,7 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## 👥 Team
 
-**Team Lead**: [Your Name]  
+**Author**: Zohaib Khan  
 **Email**: itxlevicodez@gmail.com  
 **GitHub**: [@ZohaibCodez](https://github.com/ZohaibCodez)
 
@@ -427,7 +427,7 @@ If you find AgriSahayak helpful, please ⭐ this repository!
 
 <div align="center">
 
-**Made with ❤️ for Pakistani Farmers**
+**Made with 🖤 for Pakistani Farmers**
 
 *Empowering agriculture through AI*
 
